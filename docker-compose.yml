@@ -1,0 +1,36 @@
+version: '3.8'
+
+# ==============================================================================
+# AI-Powered Smart Courtroom - Backend Local Containerization
+# Orchestrates the FastAPI backend with volume mounts and health monitoring.
+# Frontend is deployed on Vercel connecting via HTTPS API.
+# ==============================================================================
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: smartcourtroom-backend:latest
+    container_name: smartcourtroom-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - PORT=8000
+      - ENVIRONMENT=production
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Persistent storage mounts for local data isolation
+      - ./cases.db:/app/cases.db
+      - ./feedback.db:/app/feedback.db
+      - ./users.db:/app/users.db
+      - ./judgments:/app/judgments
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

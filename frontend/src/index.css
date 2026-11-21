@@ -3449,13 +3449,174 @@ kbd{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:var(--
    SMART COURTROOM LEGAL INTELLIGENCE OS - THEME-AWARE DESIGN SYSTEM
    ========================================================================== */
 
-/* ── PUBLIC LANDING & CAPABILITIES GRID ──────────────────────────────────── */
+/* ── HERO INTAKE DROPZONE (IDEA 1) ────────────────────────────────────────── */
+.hero-intake-card {
+  max-width: 980px;
+  margin: 28px auto 16px;
+  padding: 24px 28px;
+  border-radius: var(--r-lg);
+  border: 1.5px dashed var(--gold-border);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+.hero-intake-card:hover {
+  border-color: var(--gold);
+  box-shadow: 0 8px 24px rgba(184, 134, 11, 0.12);
+  transform: translateY(-2px);
+}
+.intake-badge-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: var(--gold-bg);
+  border: 1px solid var(--gold-border);
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--gold);
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+.intake-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.intake-icon-wrap {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.intake-text h2 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--ink);
+}
+.intake-text p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0;
+}
+.intake-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.btn-intake-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--bg);
+  border: none;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+[data-theme='dark'] .btn-intake-primary {
+  background: var(--gold);
+  color: #07090e;
+}
+.btn-intake-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.btn-intake-sample {
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: var(--gold-bg);
+  border: 1px solid var(--gold-border);
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-intake-sample:hover {
+  background: color-mix(in srgb, var(--gold-bg) 80%, var(--gold) 20%);
+}
+
+/* ── TWO QUICK ACTION PILLARS ─────────────────────────────────────────────── */
+.hero-quick-pillars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  max-width: 980px;
+  margin: 0 auto 32px;
+}
+@media (max-width: 640px) {
+  .hero-quick-pillars {
+    grid-template-columns: 1fr;
+  }
+}
+.quick-pillar-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+.quick-pillar-btn:hover {
+  transform: translateY(-2px);
+  border-color: var(--gold-border);
+  box-shadow: var(--shadow-md);
+}
+.pillar-icon {
+  font-size: 26px;
+  flex-shrink: 0;
+}
+.pillar-info strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 2px;
+}
+.pillar-info small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.pillar-arrow {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gold);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── DIFFERENTIATED CAPABILITY CARDS & HOVER GLOW (IDEA 3) ────────────────── */
 .public-capabilities-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  gap: 16px;
   max-width: 980px;
-  margin: 32px auto 0;
+  margin: 0 auto;
   text-align: left;
 }
 @media (max-width: 768px) {
@@ -3471,14 +3632,13 @@ kbd{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:var(--
   color: var(--ink);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease, box-shadow 0.25s ease;
   display: flex;
   flex-direction: column;
 }
 .public-capability-card:hover {
-  transform: translateY(-3px);
-  border-color: var(--gold-border);
-  box-shadow: var(--shadow-md);
+  transform: translateY(-5px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
 }
 .public-capability-card .cap-header {
   display: flex;
@@ -3491,13 +3651,10 @@ kbd{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:var(--
 }
 .public-capability-card .cap-tag {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.08em;
   padding: 3px 8px;
   border-radius: 99px;
-  background: var(--gold-bg);
-  border: 1px solid var(--gold-border);
-  color: var(--gold);
 }
 .public-capability-card h3 {
   font-size: 16px;
@@ -3509,8 +3666,63 @@ kbd{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:var(--
   font-size: 13px;
   line-height: 1.55;
   color: var(--muted);
-  margin: 0;
+  margin: 0 0 14px;
+  flex: 1;
 }
+.cap-footer-link {
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: transform 0.15s ease;
+}
+.public-capability-card:hover .cap-footer-link {
+  transform: translateX(4px);
+}
+
+/* Category Specific Color Themes & Hover Glows */
+.card-emerald:hover {
+  border-color: #059669;
+  box-shadow: 0 12px 28px rgba(5, 150, 105, 0.14);
+}
+.tag-emerald { background: rgba(5, 150, 105, 0.1); color: #059669; border: 1px solid rgba(5, 150, 105, 0.25); }
+.link-emerald { color: #059669; }
+
+.card-amber:hover {
+  border-color: #d97706;
+  box-shadow: 0 12px 28px rgba(217, 119, 6, 0.14);
+}
+.tag-amber { background: rgba(217, 119, 6, 0.1); color: #d97706; border: 1px solid rgba(217, 119, 6, 0.25); }
+.link-amber { color: #d97706; }
+
+.card-blue:hover {
+  border-color: #2563eb;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.14);
+}
+.tag-blue { background: rgba(37, 99, 235, 0.1); color: #2563eb; border: 1px solid rgba(37, 99, 235, 0.25); }
+.link-blue { color: #2563eb; }
+
+.card-cyan:hover {
+  border-color: #0284c7;
+  box-shadow: 0 12px 28px rgba(2, 132, 199, 0.14);
+}
+.tag-cyan { background: rgba(2, 132, 199, 0.1); color: #0284c7; border: 1px solid rgba(2, 132, 199, 0.25); }
+.link-cyan { color: #0284c7; }
+
+.card-crimson:hover {
+  border-color: #dc2626;
+  box-shadow: 0 12px 28px rgba(220, 38, 38, 0.14);
+}
+.tag-crimson { background: rgba(220, 38, 38, 0.1); color: #dc2626; border: 1px solid rgba(220, 38, 38, 0.25); }
+.link-crimson { color: #dc2626; }
+
+.card-purple:hover {
+  border-color: #7c3aed;
+  box-shadow: 0 12px 28px rgba(124, 58, 237, 0.14);
+}
+.tag-purple { background: rgba(124, 58, 237, 0.1); color: #7c3aed; border: 1px solid rgba(124, 58, 237, 0.25); }
+.link-purple { color: #7c3aed; }
 
 /* ── SIDEBAR REDESIGN ─────────────────────────────────────────────────────── */
 .sidebar-brand-header {

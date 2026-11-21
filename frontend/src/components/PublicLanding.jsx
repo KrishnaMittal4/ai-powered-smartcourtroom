@@ -40,79 +40,124 @@ export default function PublicLanding({ onRequireAuth, onSignIn, onCreateAccount
             <span>● Multi-Agent Moot Court</span>
           </div>
 
-          {/* Primary Action Tools */}
-          <div className="public-tools">
-            <button className="public-primary-upload" onClick={gate('upload')}>
-              <strong>📄 Start Legal Research</strong>
-              <small>Upload judgment, court order or case dossier · private indexing · page-level citation verification.</small>
-              <b>Upload & Research →</b>
+          {/* Primary Intake Hero Zone */}
+          <div className="hero-intake-card" onClick={gate('upload')}>
+            <div className="intake-badge-pill">
+              <span>⚖️ SECURE CASE DOSSIER INTAKE</span>
+            </div>
+            <div className="intake-body">
+              <div className="intake-icon-wrap">📄</div>
+              <div className="intake-text">
+                <h2>Upload Case Document or Court Judgment (PDF)</h2>
+                <p>
+                  Drag & drop FIR, chargesheet, petition, deposition, or contract · Private indexing with page-level citation & evidence verification.
+                </p>
+              </div>
+            </div>
+            <div className="intake-actions-bar">
+              <button type="button" className="btn-intake-primary">
+                <span>Browse Case Files</span>
+                <span className="btn-arrow">→</span>
+              </button>
+              <button
+                type="button"
+                className="btn-intake-sample"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  gate('sample')()
+                }}
+              >
+                <span>⚡ Try Sample Case (§138 NI Act Cheque Bounce)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Two Quick Action Pillars */}
+          <div className="hero-quick-pillars">
+            <button type="button" className="quick-pillar-btn pillar-moot" onClick={gate('moot')}>
+              <div className="pillar-icon">🏛️</div>
+              <div className="pillar-info">
+                <strong>Launch Moot Court Arena</strong>
+                <small>5 adversarial trial modes: Petitioner, Respondent & Judge against AI Bench.</small>
+              </div>
+              <span className="pillar-arrow">Try Courtroom →</span>
             </button>
-            <button onClick={gate('moot')}>
-              <strong>⚖ Moot Court</strong>
-              <small>Practice arguments in 5 modes: Step in as Counsel or Judge against an adversarial AI Bench.</small>
-              <b>Try Moot Court →</b>
-            </button>
-            <button onClick={gate('draft')}>
-              <strong>✎ Legal Drafting & BNS</strong>
-              <small>BNS ↔ IPC transition analysis, notice scanner, and automated legal draft generator.</small>
-              <b>Start Drafting →</b>
+            <button type="button" className="quick-pillar-btn pillar-bns" onClick={gate('draft')}>
+              <div className="pillar-icon">⚖️</div>
+              <div className="pillar-info">
+                <strong>BNS ↔ IPC Lens & Legal Drafting</strong>
+                <small>Compare 2024 New Criminal Laws, scan notice clauses, and draft petitions.</small>
+              </div>
+              <span className="pillar-arrow">Explore Tools →</span>
             </button>
           </div>
 
-          {/* 6 Capabilities Matrix */}
+          {/* 6 Differentiated Capabilities Matrix (Category Colors & Hover Glow) */}
           <div className="public-capabilities-grid">
-            <div className="public-capability-card" onClick={gate('cases')}>
+            {/* 1. Evidence Graph */}
+            <div className="public-capability-card card-emerald" onClick={gate('cases')}>
               <div className="cap-header">
                 <span className="cap-icon">🕸️</span>
-                <span className="cap-tag">CASE INTELLIGENCE</span>
+                <span className="cap-tag tag-emerald">CASE INTELLIGENCE</span>
               </div>
               <h3>Evidence & Claim Graph</h3>
               <p>Extracts legal issues, facts, witness statements, and statutes into an interactive relational graph with full source provenance.</p>
+              <span className="cap-footer-link link-emerald">Explore Knowledge Graph →</span>
             </div>
 
-            <div className="public-capability-card" onClick={gate('upload')}>
+            {/* 2. Adaptive Confidence */}
+            <div className="public-capability-card card-amber" onClick={gate('upload')}>
               <div className="cap-header">
                 <span className="cap-icon">🎯</span>
-                <span className="cap-tag">CALIBRATED RAG</span>
+                <span className="cap-tag tag-amber">CALIBRATED RAG</span>
               </div>
               <h3>Adaptive Confidence Engine</h3>
               <p>Calibrates dense similarity, BM25, and Cross-Encoder logits into verified confidence actions with safe refusal fallback.</p>
+              <span className="cap-footer-link link-amber">View Retrieval Signals →</span>
             </div>
 
-            <div className="public-capability-card" onClick={gate('moot')}>
+            {/* 3. Moot Court */}
+            <div className="public-capability-card card-blue" onClick={gate('moot')}>
               <div className="cap-header">
                 <span className="cap-icon">🏛️</span>
-                <span className="cap-tag">ADVERSARIAL TRIAL</span>
+                <span className="cap-tag tag-blue">ADVERSARIAL TRIAL</span>
               </div>
               <h3>Interactive Moot Court</h3>
               <p>Speech-to-text dictation, real-time courtroom objections, chess clock timer, and an 8-category judicial scorecard.</p>
+              <span className="cap-footer-link link-blue">Step In As Counsel / Judge →</span>
             </div>
 
-            <div className="public-capability-card" onClick={gate('cases')}>
+            {/* 4. Timeline */}
+            <div className="public-capability-card card-cyan" onClick={gate('cases')}>
               <div className="cap-header">
                 <span className="cap-icon">⏱️</span>
-                <span className="cap-tag">CHRONOLOGY</span>
+                <span className="cap-tag tag-cyan">CHRONOLOGY</span>
               </div>
               <h3>Automatic Case Timeline</h3>
               <p>Chronological legal milestones from FIRs to judgments with automated multi-document Date Conflict alerts.</p>
+              <span className="cap-footer-link link-cyan">Detect Milestone Conflicts →</span>
             </div>
 
-            <div className="public-capability-card" onClick={gate('cases')}>
+            {/* 5. Contradictions */}
+            <div className="public-capability-card card-crimson" onClick={gate('cases')}>
               <div className="cap-header">
                 <span className="cap-icon">⚡</span>
-                <span className="cap-tag">NLI VERIFICATION</span>
+                <span className="cap-tag tag-crimson">NLI VERIFICATION</span>
               </div>
               <h3>Cross-Document Contradictions</h3>
               <p>Side-by-side comparison of conflicting witness statements, dates, and amounts with exact verbatim exhibit quotes.</p>
+              <span className="cap-footer-link link-crimson">Compare Verbatim Quotes →</span>
             </div>
 
-            <div className="public-capability-card" onClick={gate('draft')}>
+            {/* 6. BNS & Drafting */}
+            <div className="public-capability-card card-purple" onClick={gate('draft')}>
               <div className="cap-header">
                 <span className="cap-icon">⚖️</span>
-                <span className="cap-tag">INDIAN LAW SUITE</span>
+                <span className="cap-tag tag-purple">INDIAN LAW SUITE</span>
               </div>
               <h3>BNS Lens & Legal Drafting</h3>
               <p>Instant Bharatiya Nyaya Sanhita transition lookup and automated drafting of legal notices, petitions, and replies.</p>
+              <span className="cap-footer-link link-purple">Map Laws & Generate Drafts →</span>
             </div>
           </div>
 
