@@ -1,4 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { apiFetch } from '../lib/auth.js'
+
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 const NODE_COLORS = {
   claim: { bg: 'rgba(59, 130, 246, 0.15)', border: '#3b82f6', text: '#93c5fd', icon: '⚖️' },
@@ -28,7 +31,9 @@ const EDGE_COLORS = {
   RELATED_TO: '#64748b',
 }
 
-export default function EvidenceGraph({ graphData, onOpenDocument, loading = false }) {
+export default function EvidenceGraph({ caseId, graphData: propGraphData, onOpenDocument, loading: propLoading = false }) {
+  const [internalGraphData, setInternalGraphData] = useState(null)
+  const [internalLoading, setInternalLoading] = useState(false)
   const [activeFilter, setActiveFilter] = useState('ALL')
   const [selectedNode, setSelectedNode] = useState(null)
   const [zoom, setZoom] = useState(1)
@@ -36,6 +41,22 @@ export default function EvidenceGraph({ graphData, onOpenDocument, loading = fal
   const [isPanning, setIsPanning] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const containerRef = useRef(null)
+
+  useEffect(() => {
+    if (caseId && !propGraphData) {
+      setInternalLoading(true)
+      apiFetch(`${API_BASE}/cases/${caseId}/evidence-graph`)
+        .then((res) => res.json())
+        .then((data) => {
+          setInternalGraphData(data.graph || data)
+        })
+        .catch((err) => console.warn('Failed to load evidence graph:', err))
+        .finally(() => setInternalLoading(false))
+    }
+  }, [caseId, propGraphData])
+
+  const graphData = propGraphData || internalGraphData
+  const loading = propLoading || internalLoading
 
   const nodes = useMemo(() => graphData?.nodes || [], [graphData])
   const edges = useMemo(() => graphData?.edges || [], [graphData])
@@ -274,7 +295,7 @@ export default function EvidenceGraph({ graphData, onOpenDocument, loading = fal
                   <text
                     y={32}
                     textAnchor="middle"
-                    fill="var(--text, #e2e8f0)"
+                    fill="var(--ink, #1c1812)"
                     fontSize="10.5px"
                     fontWeight={isSelected ? '700' : '500'}
                     className="node-text"

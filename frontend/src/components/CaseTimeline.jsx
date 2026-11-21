@@ -1,4 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { apiFetch } from '../lib/auth.js'
+
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 const EVENT_BADGES = {
   incident: { label: 'Incident', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)', icon: '⚡' },
@@ -17,10 +20,28 @@ const EVENT_BADGES = {
   other: { label: 'Milestone', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)', icon: '📌' },
 }
 
-export default function CaseTimeline({ timelineData, onOpenDocument, loading = false }) {
+export default function CaseTimeline({ caseId, timelineData: propTimelineData, onOpenDocument, loading: propLoading = false }) {
+  const [internalTimelineData, setInternalTimelineData] = useState(null)
+  const [internalLoading, setInternalLoading] = useState(false)
   const [filter, setFilter] = useState('ALL')
   const [isAscending, setIsAscending] = useState(true)
   const [selectedEvent, setSelectedEvent] = useState(null)
+
+  useEffect(() => {
+    if (caseId && !propTimelineData) {
+      setInternalLoading(true)
+      apiFetch(`${API_BASE}/cases/${caseId}/timeline`)
+        .then((res) => res.json())
+        .then((data) => {
+          setInternalTimelineData(data.timeline || data)
+        })
+        .catch((err) => console.warn('Failed to load timeline:', err))
+        .finally(() => setInternalLoading(false))
+    }
+  }, [caseId, propTimelineData])
+
+  const timelineData = propTimelineData || internalTimelineData
+  const loading = propLoading || internalLoading
 
   const rawEvents = useMemo(() => timelineData?.events || [], [timelineData])
   const conflictCount = useMemo(() => timelineData?.conflict_count || 0, [timelineData])

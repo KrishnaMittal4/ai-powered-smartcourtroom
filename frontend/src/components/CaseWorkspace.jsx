@@ -6,25 +6,144 @@ import EvidenceGraph from './EvidenceGraph.jsx'
 import CaseTimeline from './CaseTimeline.jsx'
 import ContradictionsView from './ContradictionsView.jsx'
 
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8080'
+const A = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
-const TABS = [
-  { id: 'overview', label: 'Overview', icon: '⌂' },
-  { id: 'evidence_graph', label: 'Evidence Graph', icon: '🕸️' },
-  { id: 'timeline', label: 'Timeline', icon: '📅' },
-  { id: 'contradictions', label: 'Contradictions', icon: '⚠️' },
-  { id: 'documents', label: 'Documents', icon: '📄' },
-  { id: 'moot', label: 'Moot Court', icon: '⚖️' },
-  { id: 'ask', label: 'Ask LEXAI', icon: '✧' },
+const NAV = [
+  ['overview', 'Overview', '⌂'],
+  ['documents', 'Documents', '▤'],
+  ['ask', 'Ask LEXAI', '✦'],
+  ['evidence_graph', 'Evidence Graph', '🕸️'],
+  ['timeline', 'Timeline', '◷'],
+  ['evidence', 'Evidence Board', '◇'],
+  ['contradictions', 'Contradictions', '⚠'],
+  ['issues', 'Issue Map', '⌘'],
+  ['arguments', 'Arguments', '⚖'],
+  ['research', 'Research Notes', '♡'],
+  ['moot', 'Moot Court', '🏛'],
+  ['brief', 'Case Brief', '▣'],
+  ['settings', 'Settings', '⚙'],
 ]
+
+const GROUPS = [
+  ['CASE', ['overview', 'documents', 'ask']],
+  ['INTELLIGENCE', ['evidence_graph', 'timeline', 'evidence', 'contradictions', 'issues']],
+  ['ADVOCACY', ['arguments', 'moot']],
+  ['WORK PRODUCT', ['research', 'brief']],
+  ['', ['settings']],
+]
+
+function label(k) {
+  return NAV.find((x) => x[0] === k)?.[1] || k
+}
+
+function src(x) {
+  const f = x.source_file || x.source_a || x.source_b
+  const p = x.page || x.page_a || x.page_b
+  return f ? `${f}${p ? ` · p.${p}` : ''}` : ''
+}
 
 function friendly(e) {
   const m = e?.message || String(e || 'Something went wrong.')
   if (/429|rate limit|too many/i.test(m)) return 'AI provider is temporarily busy. Your case data is safe; please retry shortly.'
   if (/422|validation/i.test(m)) return 'Please complete the required field before continuing.'
   if (/502|provider/i.test(m)) return 'The AI provider could not complete this analysis. Your case data is safe.'
+  if (/503|corpus|not enabled|not deployed/i.test(m)) return 'Case-only analysis is active. Add case PDFs to run evidence verification.'
   if (/network|failed to fetch|cannot reach/i.test(m)) return 'Network error. Check your connection and try again.'
   return m
+}
+
+function Toast({ toast, onClose }) {
+  if (!toast) return null
+  return (
+    <div className={`lex-toast ${toast.type || 'success'}`}>
+      <span>{toast.type === 'error' ? '!' : toast.type === 'info' ? '…' : '✓'}</span>
+      <div>{toast.text}</div>
+      <button onClick={onClose}>×</button>
+    </div>
+  )
+}
+
+function SectionTitle({ eyebrow, title, children }) {
+  return (
+    <div className="workspace-section-title">
+      <div>
+        <span className="eyebrow">{eyebrow}</span>
+        <h3>{title}</h3>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function PrivateEvidenceVerification({ verification, onOpen }) {
+  const v = verification?.verification_type === 'private_evidence' ? verification : verification?.private_evidence
+  if (!v) return null
+  const claims = v.claims || []
+  return (
+    <section className="private-verification">
+      <div className="private-verification-head">
+        <div>
+          <span className="eyebrow">PRIVATE EVIDENCE VERIFICATION</span>
+          <h3>Claim-level source verification</h3>
+        </div>
+        <span className="evidence-strength-pill">
+          {v.overview?.supported || 0} supported · {v.overview?.disputed || 0} disputed
+        </span>
+      </div>
+      {!claims.length ? (
+        <p className="muted">No material claims were extracted for verification.</p>
+      ) : (
+        <div className="private-claim-list">
+          {claims.map((c, i) => (
+            <article className={`private-claim ${c.status}`} key={i}>
+              <div className="private-claim-top">
+                <b>
+                  {c.status === 'supported' ? '✓' : c.status === 'partially_supported' ? '◐' : '!'} {c.status.replaceAll('_', ' ').toUpperCase()}
+                </b>
+                <span>Evidence strength: {c.evidence_strength}</span>
+              </div>
+              <p className="private-claim-text">{c.claim}</p>
+              <div className="private-attribution">
+                <strong>{c.attribution?.label || 'Attribution'}</strong>
+                <p>{c.attribution?.reason}</p>
+              </div>
+              {c.corroborated && <div className="verification-good">✓ Corroborated across multiple uploaded documents</div>}
+              {c.contradicted && <div className="verification-warn">⚠ Conflicting evidence detected in retrieved sources</div>}
+              <div className="private-source-list">
+                {(c.sources || []).map((x, j) => (
+                  <div className="private-verify-source" key={j}>
+                    <div>
+                      <b>{x.source_file}{x.page ? ` · p.${x.page}` : ''}</b>
+                      <small>{x.case_role?.replaceAll('_', ' ') || 'CASE EVIDENCE'} · support {Math.round((x.support_score || 0) * 100)}%</small>
+                    </div>
+                    <p>{x.passage}</p>
+                    <button className="source-link" onClick={() => onOpen?.(x.source_file)}>View source →</button>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function UploadedJudgmentVerification({ verification, sources, answer, question }) {
+  const j = verification?.verification_type === 'judgment' ? verification?.judgment : verification?.judgment
+  if (!j) return null
+  return (
+    <section className="uploaded-judgment-verification">
+      <div className="private-verification-head">
+        <div>
+          <span className="eyebrow">JUDGMENT CITATION VERIFICATION</span>
+          <h3>Uploaded judgment · court-aware verification</h3>
+        </div>
+        <span className="evidence-strength-pill">Private upload · judgment policy</span>
+      </div>
+      <Evidence entry={{ verification: j, sources: sources || [], not_found: false, answer: answer || '', question: question || '' }} />
+    </section>
+  )
 }
 
 export default function CaseWorkspace({
@@ -32,109 +151,147 @@ export default function CaseWorkspace({
   capabilities = {},
   onCaseChanged,
   onBack,
-  globalCorpusAvailable = false,
-  onOpenMootCourt,
+  onDeleteCase,
+  initialTab = 'overview',
+  initialQuestion = '',
+  initialMode = null,
 }) {
-  const [tab, setTab] = useState('overview')
+  const globalCorpusAvailable = capabilities.global_judgment_corpus === true
+  const [tab, setTab] = useState(initialTab || 'overview')
   const [docs, setDocs] = useState([])
-  const [intel, setIntel] = useState(null)
-  const [intelStatus, setIntelStatus] = useState('checking')
-  const [toast, setToast] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [analysisStage, setAnalysisStage] = useState('')
+  const [msg, setMsg] = useState('')
+  const [q, setQ] = useState(initialQuestion || '')
+  const [mode, setMode] = useState('case')
+  const [out, setOut] = useState(null)
+  const [notes, setNotes] = useState([])
+  const [side, setSide] = useState('defence')
+  const [issue, setIssue] = useState('')
   const [uploading, setUploading] = useState(false)
-  const fileInputRef = useRef(null)
-
-  // Feature Data States
-  const [evidenceGraph, setEvidenceGraph] = useState(null)
-  const [loadingGraph, setLoadingGraph] = useState(false)
-  const [timelineData, setTimelineData] = useState(null)
-  const [loadingTimeline, setLoadingTimeline] = useState(false)
-  const [contradictionsData, setContradictionsData] = useState(null)
-  const [loadingContradictions, setLoadingContradictions] = useState(false)
-
-  // Ask LEXAI in case workspace state
-  const [caseQuery, setCaseQuery] = useState('')
-  const [queryAnswer, setQueryAnswer] = useState(null)
-  const [queryLoading, setQueryLoading] = useState(false)
-
-  // Document Viewer Modal/Drawer
+  const [intel, setIntel] = useState(null)
+  const [intelStatus, setIntelStatus] = useState('missing')
+  const [intelUpdated, setIntelUpdated] = useState(null)
+  const [toast, setToast] = useState(null)
   const [viewer, setViewer] = useState(null)
   const [viewerUrl, setViewerUrl] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleteText, setDeleteText] = useState('')
+  const [evidenceFilter, setEvidenceFilter] = useState('all')
+  const [issueMap, setIssueMap] = useState(null)
+  const [issueMapStatus, setIssueMapStatus] = useState('missing')
+  const [analysisStage, setAnalysisStage] = useState('')
 
-  // Moot Court issue state
-  const [mootIssue, setMootIssue] = useState('')
-  const [mootResult, setMootResult] = useState(null)
-  const [mootLoading, setMootLoading] = useState(false)
+  const input = useRef()
 
-  const req = async (path, opt = {}) => {
-    const res = await apiFetch(`${API_BASE}${path}`, opt)
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.detail || `Request failed (${res.status})`)
-    }
-    return res.json()
-  }
-
-  // Initial load of documents and cached intelligence
-  const loadCaseData = async () => {
-    if (!activeCase?.id) return
+  const req = async (u, o) => {
+    const ctrl = new AbortController()
+    const tid = setTimeout(() => ctrl.abort(), 120000)
+    let r
     try {
-      const docRes = await req(`/cases/${activeCase.id}/documents`)
-      setDocs(docRes.documents || [])
-      const intelRes = await req(`/cases/${activeCase.id}/intelligence`)
-      setIntel(intelRes.intelligence || null)
-      setIntelStatus(intelRes.status || 'ready')
-    } catch (e) {
-      console.warn('Failed to load initial case data:', e)
+      r = await apiFetch(A + u, { ...o, signal: ctrl.signal })
+    } catch (err) {
+      clearTimeout(tid)
+      if (err?.name === 'AbortError') throw Error('Request timed out (the server is taking too long). Please retry.')
+      throw Error(`Cannot reach LEXAI at ${A}. Check that the backend is running.`)
     }
+    clearTimeout(tid)
+    let d = {}
+    const ct = r.headers.get('content-type') || ''
+    if (ct.includes('application/json')) {
+      try {
+        d = await r.json()
+      } catch {}
+    }
+    if (!r.ok) throw Error(typeof d.detail === 'string' ? d.detail : `Request failed (${r.status})`)
+    return d
+  }
+
+  const load = async () => {
+    const [d, n, i, m] = await Promise.all([
+      req(`/cases/${activeCase.id}/documents`),
+      req(`/cases/${activeCase.id}/notes`),
+      req(`/cases/${activeCase.id}/intelligence`),
+      req(`/cases/${activeCase.id}/issue-map`).catch(() => ({ status: 'missing' })),
+    ])
+    setDocs(d.documents || [])
+    setNotes(n.notes || [])
+    setIntel(i.intelligence || null)
+    setIntelStatus(i.status || 'missing')
+    setIntelUpdated(i.updated_at || null)
+    setIssueMap(m.issue_map || null)
+    setIssueMapStatus(m.status || 'missing')
+    return { documents: d.documents || [], intelStatus: i.status || 'missing' }
   }
 
   useEffect(() => {
-    loadCaseData()
-  }, [activeCase?.id])
+    setTab(initialTab || 'overview')
+    if (initialQuestion) setQ(initialQuestion)
+    setOut(null)
+    load()
+      .then((res) => {
+        const docsCount = res?.documents?.length || 0
+        const st = res?.intelStatus || 'missing'
+        if (docsCount > 0 && (st === 'missing' || st === 'stale')) {
+          setTimeout(() => {
+            analyzeCase()
+          }, 500)
+        }
+      })
+      .catch((e) => setMsg(friendly(e)))
+  }, [activeCase?.id, initialTab])
 
-  // Lazy-load Feature 1 (Evidence Graph)
   useEffect(() => {
-    if (tab === 'evidence_graph' && !evidenceGraph && activeCase?.id) {
-      setLoadingGraph(true)
-      req(`/cases/${activeCase.id}/evidence-graph`)
-        .then((data) => setEvidenceGraph(data))
-        .catch((err) => setToast({ type: 'error', text: friendly(err) }))
-        .finally(() => setLoadingGraph(false))
+    return () => {
+      if (viewerUrl) URL.revokeObjectURL(viewerUrl)
     }
-  }, [tab, activeCase?.id, evidenceGraph])
+  }, [viewerUrl])
 
-  // Lazy-load Feature 4 (Timeline)
-  useEffect(() => {
-    if (tab === 'timeline' && !timelineData && activeCase?.id) {
-      setLoadingTimeline(true)
-      req(`/cases/${activeCase.id}/timeline`)
-        .then((data) => setTimelineData(data))
-        .catch((err) => setToast({ type: 'error', text: friendly(err) }))
-        .finally(() => setLoadingTimeline(false))
-    }
-  }, [tab, activeCase?.id, timelineData])
+  const post = async (u, body) =>
+    req(u, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    })
 
-  // Lazy-load Feature 5 (Contradictions)
-  useEffect(() => {
-    if (tab === 'contradictions' && !contradictionsData && activeCase?.id) {
-      setLoadingContradictions(true)
-      req(`/cases/${activeCase.id}/contradictions`)
-        .then((data) => setContradictionsData(data))
-        .catch((err) => setToast({ type: 'error', text: friendly(err) }))
-        .finally(() => setLoadingContradictions(false))
-    }
-  }, [tab, activeCase?.id, contradictionsData])
-
-  // Trigger Case Intelligence analysis
-  const runAnalysis = async () => {
+  const run = async (fn) => {
     setBusy(true)
-    setAnalysisStage('Initiating Case Intelligence…')
-    setToast({ type: 'info', text: 'Starting full Case Intelligence extraction…' })
+    setMsg('')
     try {
-      const started = await req(`/cases/${activeCase.id}/intelligence/analyze`, { method: 'POST' })
+      await fn()
+    } catch (e) {
+      setMsg(friendly(e))
+      setToast({ type: 'error', text: friendly(e) })
+    } finally {
+      setBusy(false)
+      setAnalysisStage('')
+    }
+  }
+
+  const counts = useMemo(
+    () => ({
+      timeline: intel?.timeline?.length || 0,
+      evidence: intel?.evidence?.length || 0,
+      contradictions: intel?.contradictions?.length || 0,
+      issues: intel?.legal_issues?.length || 0,
+    }),
+    [intel]
+  )
+
+  if (!activeCase) return null
+
+  const analyzeCase = () =>
+    run(async () => {
+      setAnalysisStage('Waking analysis service…')
+      setToast({
+        type: 'info',
+        text: 'Starting Case Intelligence… Your existing analysis will stay visible until the update succeeds.',
+      })
+      try {
+        await apiFetch(`${A}/health`)
+      } catch {}
+      const started = await post(`/cases/${activeCase.id}/intelligence/analyze`)
       const jobId = started.job_id
+      if (!jobId) throw Error('The server did not create an analysis job. Please retry.')
       const deadline = Date.now() + 180000
       let finalJob = null
       while (Date.now() < deadline) {
@@ -145,44 +302,51 @@ export default function CaseWorkspace({
           finalJob = j
           break
         }
-        if (j.status === 'failed') throw new Error(j.error?.message || j.message || 'Case Intelligence failed')
+        if (j.status === 'failed') throw Error(j.error?.message || j.message || 'Case Intelligence could not be completed.')
       }
-      if (!finalJob) throw new Error('Analysis timed out. Please retry shortly.')
+      if (!finalJob) throw Error('Case analysis is still taking too long. Your previous analysis is safe; please retry shortly.')
       const d = finalJob.result || {}
       setIntel(d.intelligence || null)
       setIntelStatus(d.status || 'ready')
-      // Reset lazy caches to pick up new intelligence
-      setEvidenceGraph(null)
-      setTimelineData(null)
-      setContradictionsData(null)
-      setToast({ type: 'success', text: 'Case Intelligence ready! Graph, Timeline & Contradictions updated.' })
-    } catch (e) {
-      setToast({ type: 'error', text: friendly(e) })
-    } finally {
-      setBusy(false)
+      setIntelUpdated(d.updated_at || Date.now() / 1000)
+      const warnings = d.warnings || d.intelligence?._generation?.warnings || []
+      setToast({
+        type: warnings.length ? 'info' : 'success',
+        text: warnings.length
+          ? 'Case Intelligence completed with a warning: ' + warnings[0]
+          : 'Case Intelligence ready. Timeline, Evidence, Contradictions and Brief are cached.',
+      })
       setAnalysisStage('')
-    }
-  }
+    })
 
-  // Open PDF viewer by filename
-  const openPdfByName = async (docName) => {
-    const d = docs.find((x) => x.name === docName || x.original_name === docName)
-    if (d) {
-      openPdf(d)
-    } else if (docs.length > 0) {
-      openPdf(docs[0])
-    }
-  }
+  const buildIssueMap = () =>
+    run(async () => {
+      setToast({
+        type: 'info',
+        text: globalCorpusAvailable
+          ? 'Linking case issues to evidence and judgment authorities…'
+          : 'Mapping case issues to private evidence…',
+      })
+      const d = await post(`/cases/${activeCase.id}/issue-map/build`)
+      setIssueMap(d.issue_map || null)
+      setIssueMapStatus('ready')
+      setToast({
+        type: 'success',
+        text: globalCorpusAvailable
+          ? 'Issue Map ready: case evidence is linked to supporting and contrary authorities.'
+          : 'Private Issue Map ready. Global authority mapping is disabled in this deployment.',
+      })
+    })
 
-  const openPdf = async (doc) => {
+  const openPdf = async (d) => {
     try {
-      setToast({ type: 'info', text: `Loading ${doc.name || doc.original_name}…` })
-      const r = await apiFetch(`${API_BASE}/cases/${activeCase.id}/documents/${doc.id}/file`)
-      if (!r.ok) throw new Error('Could not open this PDF.')
+      setToast({ type: 'info', text: `Opening ${d.name}…` })
+      const r = await apiFetch(`${A}/cases/${activeCase.id}/documents/${d.id}/file`)
+      if (!r.ok) throw Error('Could not open this PDF.')
       const blob = await r.blob()
       if (viewerUrl) URL.revokeObjectURL(viewerUrl)
       const url = URL.createObjectURL(blob)
-      setViewer(doc)
+      setViewer(d)
       setViewerUrl(url)
       setToast(null)
     } catch (e) {
@@ -190,18 +354,25 @@ export default function CaseWorkspace({
     }
   }
 
-  const handleUpload = async (e) => {
-    const files = [...e.target.files]
-    if (!files.length) return
+  const upload = async (e) => {
+    const chosen = [...e.target.files]
+    if (!chosen.length) return
     setUploading(true)
+    setMsg('')
     try {
-      const form = new FormData()
-      files.forEach((f) => form.append('files', f))
-      await req(`/cases/${activeCase.id}/documents`, { method: 'POST', body: form })
-      await loadCaseData()
+      const f = new FormData()
+      chosen.forEach((x) => f.append('files', x))
+      await req(`/cases/${activeCase.id}/documents`, { method: 'POST', body: f })
+      await load()
       await onCaseChanged?.()
-      setToast({ type: 'success', text: `Uploaded ${files.length} document${files.length > 1 ? 's' : ''}. Analyzing case…` })
-      setTimeout(() => runAnalysis(), 500)
+      setToast({
+        type: 'success',
+        text: `Added ${chosen.length} private PDF${chosen.length === 1 ? '' : 's'}. Automatically running Case Intelligence…`,
+      })
+      setTab('overview')
+      setTimeout(() => {
+        analyzeCase()
+      }, 400)
     } catch (err) {
       setToast({ type: 'error', text: friendly(err) })
     } finally {
@@ -210,474 +381,750 @@ export default function CaseWorkspace({
     }
   }
 
-  const handleCaseQuery = async (e) => {
-    e?.preventDefault?.()
-    if (!caseQuery.trim()) return
-    setQueryLoading(true)
-    try {
-      const res = await req(`/cases/${activeCase.id}/query`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: caseQuery.trim(),
-          mode: globalCorpusAvailable ? 'both' : 'case',
-          top_k: 4,
-          verify: true,
-        }),
-      })
-      setQueryAnswer(res)
-    } catch (err) {
-      setToast({ type: 'error', text: friendly(err) })
-    } finally {
-      setQueryLoading(false)
-    }
-  }
-
-  const handleCaseMoot = async (e) => {
-    e?.preventDefault?.()
-    if (!mootIssue.trim()) return
-    setMootLoading(true)
-    try {
-      const res = await req(`/cases/${activeCase.id}/moot-court`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ issue: mootIssue.trim() }),
-      })
-      setMootResult(res)
-    } catch (err) {
-      setToast({ type: 'error', text: friendly(err) })
-    } finally {
-      setMootLoading(false)
-    }
-  }
+  const render = (o) => (
+    <div className="intel-grid">
+      {Object.entries(o || {})
+        .filter(([k]) => !['retrieval_sources', 'case_sources'].includes(k))
+        .map(([k, v]) => (
+          <div className="intel-row" key={k}>
+            <b>{k.replaceAll('_', ' ')}</b>
+            <div>
+              {Array.isArray(v) ? (
+                v.map((x, i) => (
+                  <div className="intel-item" key={i}>
+                    {typeof x === 'object'
+                      ? Object.entries(x).map(([a, b]) => (
+                          <p key={a}>
+                            <strong>{a.replaceAll('_', ' ')}:</strong> {String(b ?? '—')}
+                          </p>
+                        ))
+                      : String(x)}
+                  </div>
+                ))
+              ) : typeof v === 'object' ? (
+                JSON.stringify(v)
+              ) : (
+                String(v ?? '—')
+              )}
+            </div>
+          </div>
+        ))}
+    </div>
+  )
 
   return (
-    <section className="unified-case-workspace page-enter">
-      {/* Toast banner */}
-      {toast && (
-        <div className={`lex-toast ${toast.type}`}>
-          <span>{toast.type === 'error' ? '!' : '✓'}</span>
-          <div>{toast.text}</div>
-          <button onClick={() => setToast(null)}>✕</button>
+    <section className="case-workspace-v3 page-enter">
+      <Toast toast={toast} onClose={() => setToast(null)} />
+      <input ref={input} hidden multiple type="file" accept=".pdf,application/pdf" onChange={upload} />
+
+      <header className="case-v3-head">
+        <div>
+          <button className="back-link" onClick={onBack}>
+            ← My Cases
+          </button>
+          <span className="eyebrow">PRIVATE CASE WORKSPACE</span>
+          <h1>{activeCase.title}</h1>
+          <p>{activeCase.description || 'Private evidence, grounded research and courtroom intelligence.'}</p>
+        </div>
+        <div className="case-head-actions">
+          <span className={`intel-badge ${intelStatus}`}>
+            {intelStatus === 'ready'
+              ? '✓ Intelligence ready'
+              : intelStatus === 'stale'
+              ? '↻ Analysis outdated'
+              : '○ Not analyzed'}
+          </span>
+          <button className="btn-primary" disabled={uploading} onClick={() => input.current?.click()}>
+            {uploading ? 'Uploading…' : '＋ Add PDFs'}
+          </button>
+        </div>
+      </header>
+
+      {msg && (
+        <div className="case-message case-message-error">
+          {msg}
+          <button onClick={() => setMsg('')}>×</button>
         </div>
       )}
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept=".pdf,application/pdf"
-        style={{ display: 'none' }}
-        onChange={handleUpload}
-      />
-
-      {/* ── TOP UNIFIED WORKSPACE HEADER ── */}
-      <header className="workspace-header">
-        <div className="header-breadcrumbs">
-          <button className="back-to-cases" onClick={onBack}>← Back to My Cases</button>
-          <span className="case-status-badge active">● Private Case Workspace</span>
-        </div>
-
-        <div className="case-title-row">
-          <div className="case-identity">
-            <h1 className="case-main-title">{activeCase.title}</h1>
-            <p className="case-subtitle">{activeCase.description || 'Isolated research workspace with verified evidence graph and provenance tracking.'}</p>
-          </div>
-
-          <div className="case-quick-actions">
-            <button
-              className="btn-action-primary"
-              disabled={uploading}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {uploading ? 'Uploading…' : '＋ Add Case PDFs'}
-            </button>
-            <button
-              className="btn-action-secondary"
-              disabled={busy || docs.length === 0}
-              onClick={runAnalysis}
-              title="Run or refresh Case Intelligence"
-            >
-              {busy ? (analysisStage || 'Analyzing…') : '⚡ Run Intelligence'}
-            </button>
-          </div>
-        </div>
-
-        {/* Unified Tab Bar */}
-        <nav className="workspace-tabs-bar" role="tablist">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              role="tab"
-              aria-selected={tab === t.id}
-              className={`workspace-tab ${tab === t.id ? 'active' : ''}`}
-              onClick={() => setTab(t.id)}
-            >
-              <span className="tab-icon">{t.icon}</span>
-              <span className="tab-label">{t.label}</span>
-              {t.id === 'contradictions' && intel?.contradictions?.length > 0 && (
-                <span className="tab-badge-alert">{intel.contradictions.length}</span>
-              )}
-            </button>
+      <div className="case-v3-layout">
+        {/* Navigation Sidebar */}
+        <aside className="case-nav" aria-label="Case workspace navigation">
+          {GROUPS.map(([g, ids]) => (
+            <div className="case-nav-group" key={g || 'settings'}>
+              {g && <span>{g}</span>}
+              {ids.map((id) => {
+                const n = NAV.find((x) => x[0] === id)
+                return (
+                  <button
+                    key={id}
+                    className={tab === id ? 'active' : ''}
+                    onClick={() => {
+                      setTab(id)
+                      setOut(null)
+                    }}
+                  >
+                    <i>{n[2]}</i>
+                    {n[1]}
+                    {id === 'contradictions' && counts.contradictions > 0 ? (
+                      <em>{counts.contradictions}</em>
+                    ) : null}
+                  </button>
+                )
+              })}
+            </div>
           ))}
-        </nav>
-      </header>
+        </aside>
 
-      {/* ── TWO-COLUMN MAIN WORKSPACE LAYOUT ── */}
-      <div className="workspace-grid-layout">
-        {/* LEFT / MAIN VIEW CONTAINER */}
-        <main className="workspace-main-column">
-          {/* Tab 1: OVERVIEW */}
+        {/* Main Content Pane */}
+        <main className="case-v3-main">
+          {/* 1. OVERVIEW */}
           {tab === 'overview' && (
-            <div className="tab-view overview-view">
-              <div className="overview-hero-card">
-                <div className="hero-text">
-                  <span className="hero-tag">CASE INTELLIGENCE OVERVIEW</span>
-                  <h2>{intel ? 'Case Mapped with Full Provenance' : 'Ready for Automated Analysis'}</h2>
+            <>
+              <div className="intel-hero">
+                <div>
+                  <span className="eyebrow">CASE INTELLIGENCE</span>
+                  <h2>
+                    {intelStatus === 'ready'
+                      ? intel?._incomplete_structured_analysis
+                        ? 'Case summary ready · structured sections need review'
+                        : 'Your case is mapped and ready'
+                      : 'Analyze once. Reuse everywhere.'}
+                  </h2>
                   <p>
-                    {intel?.summary
-                      ? intel.summary
-                      : 'Upload case PDFs to automatically construct the Evidence Graph, Chronological Timeline, and Cross-Document Contradiction Detector.'}
+                    {intelStatus === 'ready'
+                      ? intel?._incomplete_structured_analysis
+                        ? 'LEXAI recovered the case summary, but Timeline, Evidence or Legal Issues could not be reliably structured. Re-analyze after checking the source PDFs.'
+                        : 'LEXAI has structured the material facts, timeline, evidence and conflicts from your private case sources.'
+                      : 'One coordinated analysis populates Overview, Timeline, Evidence, Contradictions and Case Brief without repeated LLM calls.'}
                   </p>
                 </div>
-                <div className="hero-stats-row">
-                  <div className="hero-stat">
-                    <strong>{docs.length}</strong>
-                    <span>Documents</span>
-                  </div>
-                  <div className="hero-stat">
-                    <strong>{intel?.parties?.length || 0}</strong>
-                    <span>Parties</span>
-                  </div>
-                  <div className="hero-stat">
-                    <strong>{intel?.legal_issues?.length || 0}</strong>
-                    <span>Legal Issues</span>
-                  </div>
-                  <div className="hero-stat">
-                    <strong>{intel?.evidence?.length || 0}</strong>
-                    <span>Evidence Items</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Navigation Cards */}
-              <div className="quick-access-grid">
-                <div className="access-card" onClick={() => setTab('evidence_graph')}>
-                  <span className="card-emoji">🕸️</span>
-                  <h4>Evidence & Claim Graph</h4>
-                  <p>Interactive relational network of claims, statutes, witnesses, and exhibits.</p>
-                  <span className="card-link">Explore Graph →</span>
-                </div>
-                <div className="access-card" onClick={() => setTab('timeline')}>
-                  <span className="card-emoji">📅</span>
-                  <h4>Case Timeline</h4>
-                  <p>Chronological milestones and date conflict detection across records.</p>
-                  <span className="card-link">View Timeline →</span>
-                </div>
-                <div className="access-card" onClick={() => setTab('contradictions')}>
-                  <span className="card-emoji">⚠️</span>
-                  <h4>Contradiction Detector</h4>
-                  <p>Cross-document discrepancies in witness statements, amounts, and dates.</p>
-                  <span className="card-link">Review Clashes →</span>
-                </div>
-                <div className="access-card" onClick={() => setTab('moot')}>
-                  <span className="card-emoji">⚖️</span>
-                  <h4>Case Moot Court</h4>
-                  <p>Adversarial AI debate strictly grounded on your case documents.</p>
-                  <span className="card-link">Enter Courtroom →</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Tab 2: EVIDENCE GRAPH */}
-          {tab === 'evidence_graph' && (
-            <div className="tab-view graph-view">
-              <div className="view-header">
-                <div>
-                  <span className="view-eyebrow">FEATURE 1 · CASE INTELLIGENCE</span>
-                  <h3>Legal Evidence & Claim Graph</h3>
-                </div>
                 <button
-                  className="btn-refresh"
-                  onClick={() => {
-                    setEvidenceGraph(null)
-                    setTab('evidence_graph')
-                  }}
+                  className="btn-primary btn-glow"
+                  disabled={busy || !docs.length}
+                  onClick={analyzeCase}
                 >
-                  ↻ Re-extract Graph
+                  {busy ? analysisStage || 'Analyzing case…' : intelStatus === 'ready' ? '↻ Re-analyze Case' : '✦ Analyze Case'}
                 </button>
               </div>
-              <EvidenceGraph
-                graphData={evidenceGraph}
-                loading={loadingGraph}
-                onOpenDocument={openPdfByName}
-              />
-            </div>
-          )}
 
-          {/* Tab 3: TIMELINE */}
-          {tab === 'timeline' && (
-            <div className="tab-view timeline-view">
-              <div className="view-header">
+              <div className="metric-grid">
                 <div>
-                  <span className="view-eyebrow">FEATURE 4 · CASE CHRONOLOGY</span>
-                  <h3>Automatic Case Timeline & Date Conflicts</h3>
+                  <strong>{docs.length}</strong>
+                  <span>Private documents</span>
                 </div>
-                <button
-                  className="btn-refresh"
-                  onClick={() => {
-                    setTimelineData(null)
-                    setTab('timeline')
-                  }}
+                <div style={{ cursor: 'pointer' }} onClick={() => setTab('timeline')}>
+                  <strong>{counts.timeline}</strong>
+                  <span>Timeline events</span>
+                </div>
+                <div style={{ cursor: 'pointer' }} onClick={() => setTab('evidence')}>
+                  <strong>{counts.evidence}</strong>
+                  <span>Evidence items</span>
+                </div>
+                <div
+                  className={counts.contradictions ? 'metric-alert' : ''}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setTab('contradictions')}
                 >
-                  ↻ Refresh Timeline
-                </button>
+                  <strong>{counts.contradictions}</strong>
+                  <span>Conflicts detected</span>
+                </div>
               </div>
-              <CaseTimeline
-                timelineData={timelineData}
-                loading={loadingTimeline}
-                onOpenDocument={openPdfByName}
-              />
-            </div>
+
+              {intelStatus === 'stale' && (
+                <div className="stale-banner">
+                  ⚠ Documents changed since the last analysis. Update Case Intelligence before relying on cached findings.
+                </div>
+              )}
+
+              {intelStatus === 'ready' && (
+                <div className="overview-grid">
+                  <section className="overview-card wide">
+                    <span className="eyebrow">EXECUTIVE SUMMARY</span>
+                    <p className="summary-copy">{intel?.summary || 'No summary extracted.'}</p>
+                  </section>
+                  <section className="overview-card">
+                    <span className="eyebrow">KEY LEGAL ISSUES</span>
+                    {(intel?.legal_issues || []).slice(0, 5).map((x, i) => (
+                      <button key={i} onClick={() => setTab('arguments')} className="issue-row">
+                        <span>{i + 1}</span>
+                        {x.issue || String(x)}
+                      </button>
+                    ))}
+                  </section>
+                  <section className="overview-card">
+                    <span className="eyebrow">INTELLIGENCE MODULES</span>
+                    <button className="finding-neutral" onClick={() => setTab('evidence_graph')}>
+                      🕸️ Evidence & Claim Graph <b>Explore →</b>
+                    </button>
+                    <button className="finding-neutral" onClick={() => setTab('timeline')}>
+                      ◷ {counts.timeline} Chronological Milestones <b>View →</b>
+                    </button>
+                    {counts.contradictions ? (
+                      <button className="finding-alert" onClick={() => setTab('contradictions')}>
+                        ⚠ {counts.contradictions} Potential Contradiction{counts.contradictions === 1 ? '' : 's'} <b>Review →</b>
+                      </button>
+                    ) : (
+                      <button className="finding-neutral" onClick={() => setTab('contradictions')}>
+                        ⚡ Cross-Document Contradiction Detector <b>Inspect →</b>
+                      </button>
+                    )}
+                  </section>
+                </div>
+              )}
+
+              {!docs.length && (
+                <div className="empty-workspace">
+                  <div>📄</div>
+                  <h3>Add case documents to begin</h3>
+                  <p>Upload an FIR, charge sheet, witness statement, order or evidence report.</p>
+                  <button className="btn-primary" onClick={() => input.current?.click()}>
+                    Add Private PDFs
+                  </button>
+                </div>
+              )}
+            </>
           )}
 
-          {/* Tab 4: CONTRADICTIONS */}
-          {tab === 'contradictions' && (
-            <div className="tab-view contradictions-view">
-              <div className="view-header">
-                <div>
-                  <span className="view-eyebrow">FEATURE 5 · EVIDENTIARY AUDIT</span>
-                  <h3>Cross-Document Contradiction Detector</h3>
-                </div>
-                <button
-                  className="btn-refresh"
-                  onClick={() => {
-                    setContradictionsData(null)
-                    setTab('contradictions')
-                  }}
-                >
-                  ↻ Scan Discrepancies
-                </button>
-              </div>
-              <ContradictionsView
-                contradictionsData={contradictionsData}
-                loading={loadingContradictions}
-                onOpenDocument={openPdfByName}
-              />
-            </div>
-          )}
-
-          {/* Tab 5: DOCUMENTS */}
+          {/* 2. DOCUMENTS */}
           {tab === 'documents' && (
-            <div className="tab-view documents-view">
-              <div className="view-header">
-                <div>
-                  <span className="view-eyebrow">CASE DOSSIER</span>
-                  <h3>Uploaded Evidence Documents ({docs.length})</h3>
-                </div>
-                <button className="btn-action-primary" onClick={() => fileInputRef.current?.click()}>
-                  ＋ Upload More PDFs
+            <div className="case-panel-v3">
+              <SectionTitle eyebrow="CASE MATERIAL" title="Private Documents">
+                <button className="btn-primary" onClick={() => input.current?.click()}>
+                  ＋ Add PDFs
                 </button>
-              </div>
-
-              {docs.length === 0 ? (
-                <div className="empty-graph-state">
-                  <span className="empty-icon">📂</span>
-                  <h3>No documents uploaded yet</h3>
-                  <p>Add case pleadings, charge-sheets, FIRs, or legal notices to enable Case Intelligence.</p>
+              </SectionTitle>
+              <p className="muted">
+                Uploaded judgments and case documents are securely indexed for citation verification and intelligence analysis.
+              </p>
+              {!docs.length ? (
+                <div className="empty-workspace">
+                  <div>📄</div>
+                  <h3>No private PDFs yet</h3>
+                  <p>Add source material to build a private hybrid index.</p>
                 </div>
               ) : (
-                <div className="doc-list-grid">
+                <div className="document-grid">
                   {docs.map((d) => (
-                    <div key={d.id} className="doc-card">
-                      <div className="doc-card-icon">📄</div>
-                      <div className="doc-card-info">
-                        <strong>{d.name || d.original_name}</strong>
-                        <small>{(d.size_bytes / 1024).toFixed(0)} KB · Uploaded</small>
+                    <article className="document-card" key={d.id}>
+                      <div className="doc-icon">PDF</div>
+                      <div className="doc-body">
+                        <h4>{d.name}</h4>
+                        <p>{(d.size_bytes / 1048576).toFixed(2)} MB · Private case source</p>
+                        <span className="status-pill indexed">✓ Indexed on demand</span>
                       </div>
-                      <button className="btn-open-pdf" onClick={() => openPdf(d)}>
-                        Inspect PDF →
-                      </button>
-                    </div>
+                      <div className="doc-actions">
+                        <button className="btn-quiet" onClick={() => openPdf(d)}>
+                          View
+                        </button>
+                        <button
+                          className="btn-quiet danger-text"
+                          onClick={() =>
+                            run(async () => {
+                              await req(`/cases/${activeCase.id}/documents/${d.id}`, { method: 'DELETE' })
+                              await load()
+                              setToast({ type: 'success', text: `Removed ${d.name}. Case Intelligence now needs an update.` })
+                            })
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </article>
                   ))}
                 </div>
               )}
             </div>
           )}
 
-          {/* Tab 6: MOOT COURT */}
-          {tab === 'moot' && (
-            <div className="tab-view moot-view">
-              <div className="view-header">
-                <div>
-                  <span className="view-eyebrow">FEATURE 3 · ADVERSARIAL ARENA</span>
-                  <h3>Case-Aware Moot Court Simulation</h3>
-                </div>
+          {/* 3. ASK LEXAI */}
+          {tab === 'ask' && (
+            <div className="case-panel-v3">
+              <SectionTitle eyebrow="GROUNDED RESEARCH" title="Ask LEXAI" />
+              <div className="scope-switch">
+                {(globalCorpusAvailable
+                  ? [
+                      ['case', 'Case Documents'],
+                      ['global', 'Judgments'],
+                      ['both', 'Both'],
+                    ]
+                  : [['case', 'Case Documents']]
+                ).map(([v, l]) => (
+                  <button key={v} className={mode === v ? 'active' : ''} onClick={() => setMode(v)}>
+                    {l}
+                  </button>
+                ))}
               </div>
-
-              <form onSubmit={handleCaseMoot} className="case-moot-form">
-                <label className="input-label">Legal Proposition or Disputed Question</label>
+              <div className="case-ask-box">
                 <textarea
-                  className="case-textarea"
-                  rows={3}
-                  value={mootIssue}
-                  onChange={(e) => setMootIssue(e.target.value)}
-                  placeholder="e.g. Whether liability attaches under Section 138 when statutory notice was returned unserved..."
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Ask about facts, evidence, witnesses, legal issues or precedent…"
                 />
                 <button
-                  type="submit"
-                  className="btn-action-primary"
-                  disabled={mootIssue.trim().length < 5 || mootLoading}
+                  className="btn-primary"
+                  disabled={q.trim().length < 3 || busy}
+                  onClick={() =>
+                    run(async () =>
+                      setOut(
+                        await post(`/cases/${activeCase.id}/query`, {
+                          question: q.trim(),
+                          mode,
+                          top_k: 4,
+                          verify: true,
+                        })
+                      )
+                    )
+                  }
                 >
-                  {mootLoading ? 'Simulating Courtroom Debate…' : '⚖️ Commence Case-Grounded Moot'}
+                  {busy ? 'Researching…' : 'Ask with Hybrid RAG →'}
                 </button>
-              </form>
-
-              {mootResult && (
-                <div className="moot-case-result">
-                  <div className="disposition-strip">
-                    <span>DISPOSITION:</span>
-                    <strong>{mootResult.bench?.disposition || mootResult.disposition}</strong>
-                    <span className="winner-pill">Prevailing: {mootResult.bench?.prevailing_party || mootResult.winner}</span>
-                  </div>
-
-                  <div className="counsel-pods">
-                    <div className="counsel-pod pet">
-                      <h4>Senior Counsel for Petitioner</h4>
-                      <p>{mootResult.petitioner?.argument}</p>
+              </div>
+              {out && (
+                <div className="grounded-result page-enter">
+                  <div className="result-head">
+                    <div>
+                      <span className="eyebrow">LEXAI ANALYSIS</span>
+                      <h3>Grounded answer</h3>
                     </div>
-                    <div className="counsel-pod resp">
-                      <h4>Senior Counsel for Respondent</h4>
-                      <p>{mootResult.respondent?.argument}</p>
-                    </div>
+                    <button
+                      className="btn-quiet"
+                      onClick={() =>
+                        run(async () => {
+                          await post(`/cases/${activeCase.id}/notes`, {
+                            title: q,
+                            content: out.answer,
+                            kind: 'ai-research',
+                          })
+                          await load()
+                          setToast({ type: 'success', text: 'Research saved to this case.' })
+                        })
+                      }
+                    >
+                      ♡ Save to Case
+                    </button>
                   </div>
-
-                  <div className="bench-verdict-box">
-                    <h4>🏛️ Presiding Judicial Order</h4>
-                    <p>{mootResult.bench?.verdict}</p>
+                  <div className="case-answer-box">
+                    <div className="answer-content markdown-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(out.answer) }} />
                   </div>
+                  <div className="source-stack">
+                    {out.sources?.map((s, i) => (
+                      <article className={`source-card ${s.scope === 'private' ? 'private' : ''}`} key={i}>
+                        <b>{s.scope === 'private' ? '🔒 CASE EVIDENCE' : '⚖ LEGAL AUTHORITY'}</b>
+                        <h4>
+                          {s.source_file}
+                          {s.page ? ` · p.${s.page}` : ''}
+                        </h4>
+                        <p>{s.text}</p>
+                      </article>
+                    ))}
+                  </div>
+                  {(out.verification?.verification_type === 'judgment' || out.verification?.judgment) && (
+                    <UploadedJudgmentVerification
+                      verification={out.verification}
+                      sources={out.sources}
+                      answer={out.answer}
+                      question={q}
+                    />
+                  )}
+                  <PrivateEvidenceVerification
+                    verification={out.verification}
+                    onOpen={(name) => {
+                      const d = docs.find((d) => d.name === name)
+                      if (d) openPdf(d)
+                    }}
+                  />
                 </div>
               )}
             </div>
           )}
 
-          {/* Tab 7: ASK LEXAI */}
-          {tab === 'ask' && (
-            <div className="tab-view ask-view">
-              <div className="view-header">
-                <div>
-                  <span className="view-eyebrow">CASE RAG ENGINE</span>
-                  <h3>Ask LEXAI over Case Records</h3>
-                </div>
-              </div>
+          {/* 4. FEATURE 1: LEGAL EVIDENCE & CLAIM GRAPH */}
+          {tab === 'evidence_graph' && (
+            <div className="case-panel-v3">
+              <SectionTitle eyebrow="CASE INTELLIGENCE" title="Legal Evidence & Claim Graph" />
+              <EvidenceGraph
+                caseId={activeCase.id}
+                onOpenDocument={(docName) => {
+                  const d = docs.find((doc) => doc.name === docName)
+                  if (d) openPdf(d)
+                }}
+              />
+            </div>
+          )}
 
-              <form onSubmit={handleCaseQuery} className="case-query-form">
-                <input
-                  type="text"
-                  className="case-input"
-                  value={caseQuery}
-                  onChange={(e) => setCaseQuery(e.target.value)}
-                  placeholder="Ask any question strictly grounded on this case's documents..."
-                />
-                <button type="submit" className="btn-action-primary" disabled={queryLoading}>
-                  {queryLoading ? 'Retrieving…' : 'Ask LEXAI'}
-                </button>
-              </form>
+          {/* 5. FEATURE 4: CASE TIMELINE */}
+          {tab === 'timeline' && (
+            <div className="case-panel-v3">
+              <SectionTitle eyebrow="CASE INTELLIGENCE" title="Chronological Case Timeline & Conflict Tracker">
+                {intelStatus !== 'ready' && (
+                  <button className="btn-primary" onClick={analyzeCase}>
+                    Analyze Case
+                  </button>
+                )}
+              </SectionTitle>
+              <CaseTimeline caseId={activeCase.id} />
+            </div>
+          )}
 
-              {queryAnswer && (
-                <div className="case-query-answer">
-                  <div className="answer-text">
-                    {renderMarkdown(queryAnswer.answer)}
+          {/* 6. EVIDENCE BOARD */}
+          {tab === 'evidence' && (
+            <div className="case-panel-v3">
+              <SectionTitle eyebrow="CASE INTELLIGENCE" title="Evidence Board" />
+              {intelStatus === 'ready' ? (
+                <>
+                  <div className="evidence-filters">
+                    {['all', 'testimonial', 'documentary', 'digital', 'forensic', 'physical'].map((f) => (
+                      <button
+                        key={f}
+                        className={evidenceFilter === f ? 'active' : ''}
+                        onClick={() => setEvidenceFilter(f)}
+                      >
+                        {f[0].toUpperCase() + f.slice(1)}
+                      </button>
+                    ))}
                   </div>
-                  {queryAnswer.sources?.length > 0 && (
-                    <div className="case-sources-list">
-                      <span className="sources-title">RETRIEVED CASE EXCERPTS:</span>
-                      {queryAnswer.sources.map((s, idx) => (
-                        <div key={idx} className="source-item">
-                          <strong>{s.source_file || s.case_name} (p.{s.page || 1})</strong>
-                          <p>{s.text}</p>
-                        </div>
-                      ))}
+                  {(intel?.evidence || []).length ? (
+                    <div className="evidence-board">
+                      {(intel?.evidence || [])
+                        .filter((x) => evidenceFilter === 'all' || x.type === evidenceFilter)
+                        .map((x, i) => (
+                          <article className="evidence-card-v3" key={i}>
+                            <div className="evidence-card-head">
+                              <span>E-{String(i + 1).padStart(3, '0')}</span>
+                              <em>{x.type || 'other'}</em>
+                            </div>
+                            <h4>{x.label || 'Evidence item'}</h4>
+                            <p>{x.summary}</p>
+                            <div className="evidence-meta">
+                              <span>
+                                Supports <b>{x.supports || 'unknown'}</b>
+                              </span>
+                              {x.caveat && <span className="caveat">⚠ {x.caveat}</span>}
+                            </div>
+                            <button
+                              className="source-link"
+                              onClick={() => {
+                                const d = docs.find((d) => d.name === x.source_file)
+                                if (d) openPdf(d)
+                              }}
+                            >
+                              {src(x)}
+                            </button>
+                          </article>
+                        ))}
                     </div>
+                  ) : (
+                    <EmptyStructured
+                      title="No evidence items extracted"
+                      text="The case analysis completed, but no structured evidence items were produced. Re-analyze to retry targeted extraction."
+                      onAnalyze={analyzeCase}
+                    />
                   )}
+                </>
+              ) : (
+                <EmptyIntel onAnalyze={analyzeCase} />
+              )}
+            </div>
+          )}
+
+          {/* 7. FEATURE 5: CONTRADICTIONS */}
+          {tab === 'contradictions' && (
+            <div className="case-panel-v3">
+              <SectionTitle eyebrow="CASE INTELLIGENCE" title="Cross-Document Contradiction Detector">
+                {intelStatus !== 'ready' && (
+                  <button className="btn-primary" onClick={analyzeCase}>
+                    Analyze Case
+                  </button>
+                )}
+              </SectionTitle>
+              <ContradictionsView caseId={activeCase.id} />
+            </div>
+          )}
+
+          {/* 8. LEGAL ISSUE MAP */}
+          {tab === 'issues' && (
+            <div className="case-panel-v3">
+              <SectionTitle eyebrow="CASE → EVIDENCE → LAW" title="Legal Issue Map">
+                <button
+                  className="btn-primary"
+                  disabled={busy || intelStatus !== 'ready'}
+                  onClick={buildIssueMap}
+                >
+                  {busy ? 'Mapping…' : issueMapStatus === 'ready' ? '↻ Refresh Issue Map' : '✦ Build Issue Map'}
+                </button>
+              </SectionTitle>
+              <p className="muted">
+                Links each extracted legal issue to private case evidence and retrieved authorities with document/page provenance.
+              </p>
+              {intelStatus !== 'ready' ? (
+                <EmptyIntel onAnalyze={analyzeCase} />
+              ) : !(intel?.legal_issues || []).length ? (
+                <EmptyStructured
+                  title="No legal issues extracted"
+                  text="Issue Map needs structured legal issues from Case Intelligence. Re-analyze the case to run targeted issue extraction."
+                  onAnalyze={analyzeCase}
+                />
+              ) : issueMapStatus !== 'ready' ? (
+                <div className="empty-workspace">
+                  <div>⌘</div>
+                  <h3>Build the legal issue map</h3>
+                  <p>
+                    LEXAI will reuse saved Case Intelligence, preserve document/page provenance, and synthesize supporting or contrary authorities.
+                  </p>
+                  <button className="btn-primary" onClick={buildIssueMap}>
+                    Build Issue Map
+                  </button>
+                </div>
+              ) : (
+                <div className="issue-map-grid">
+                  {(issueMap?.issues || []).map((x, i) => (
+                    <article className="issue-map-card" key={i}>
+                      <div className="issue-map-head">
+                        <span>ISSUE {i + 1}</span>
+                        <h4>{x.issue}</h4>
+                        {x.basis && <p>{x.basis}</p>}
+                      </div>
+                      <div className="issue-map-cols">
+                        <section>
+                          <b>CASE EVIDENCE</b>
+                          {(x.case_evidence || []).length ? (
+                            (x.case_evidence || []).map((e, j) => (
+                              <div className="map-source" key={j}>
+                                <p>{e.text}</p>
+                                <button
+                                  className="source-link"
+                                  onClick={() => {
+                                    const d = docs.find((d) => d.name === e.source_file)
+                                    if (d) openPdf(d)
+                                  }}
+                                >
+                                  {e.source_file}
+                                  {e.page ? ` · p.${e.page}` : ''}
+                                </button>
+                              </div>
+                            ))
+                          ) : (
+                            <small>No direct evidence link established.</small>
+                          )}
+                        </section>
+                        <section>
+                          <b>SUPPORTING AUTHORITIES</b>
+                          {(x.supporting_authorities || []).map((a, j) => (
+                            <div className="map-authority support" key={j}>
+                              <strong>{a.case_name}</strong>
+                              <p>{a.reason}</p>
+                              <small>
+                                {a.source_file}
+                                {a.legal_role && ` · ${a.legal_role}`}
+                              </small>
+                            </div>
+                          ))}
+                          {!(x.supporting_authorities || []).length && (
+                            <small>No supporting authority confidently classified.</small>
+                          )}
+                        </section>
+                        <section>
+                          <b>CONTRARY / DISTINGUISHABLE</b>
+                          {(x.contrary_authorities || []).map((a, j) => (
+                            <div className="map-authority contrary" key={j}>
+                              <strong>{a.case_name}</strong>
+                              <p>{a.reason}</p>
+                              <small>
+                                {a.source_file}
+                                {a.legal_role && ` · ${a.legal_role}`}
+                              </small>
+                            </div>
+                          ))}
+                          {!(x.contrary_authorities || []).length && (
+                            <small>No contrary authority confidently classified.</small>
+                          )}
+                        </section>
+                      </div>
+                      {(x.related_authorities || []).length > 0 && (
+                        <details className="related-authorities">
+                          <summary>Related authorities ({x.related_authorities.length})</summary>
+                          {x.related_authorities.map((a, j) => (
+                            <p key={j}>
+                              <b>{a.case_name}</b> — {a.reason}
+                            </p>
+                          ))}
+                        </details>
+                      )}
+                    </article>
+                  ))}
                 </div>
               )}
+              {issueMap?.disclaimer && <p className="muted">⚠ {issueMap.disclaimer}</p>}
+            </div>
+          )}
+
+          {/* 9. ARGUMENTS */}
+          {tab === 'arguments' && (
+            <div className="case-panel-v3">
+              <SectionTitle eyebrow="ADVOCACY" title="Legal Argument Builder" />
+              <div className="argument-builder-v3">
+                <label>
+                  Representing
+                  <select value={side} onChange={(e) => setSide(e.target.value)}>
+                    <option value="prosecution">Prosecution</option>
+                    <option value="defence">Defence</option>
+                    <option value="petitioner">Petitioner</option>
+                    <option value="respondent">Respondent</option>
+                  </select>
+                </label>
+                <label>
+                  Legal issue
+                  <input
+                    value={issue}
+                    onChange={(e) => setIssue(e.target.value)}
+                    placeholder="e.g. Reliability of eyewitness testimony"
+                  />
+                </label>
+                <div className="builder-flags">
+                  <span>✓ Case evidence</span>
+                  <span>✓ Precedent analysis</span>
+                  <span>✓ Case intelligence</span>
+                </div>
+                <button
+                  className="btn-primary"
+                  disabled={issue.trim().length < 3 || busy}
+                  onClick={() =>
+                    run(async () =>
+                      setOut(
+                        await post(`/cases/${activeCase.id}/argument`, {
+                          side,
+                          issue: issue.trim(),
+                        })
+                      )
+                    )
+                  }
+                >
+                  Build cited argument →
+                </button>
+              </div>
+              {out && render(out)}
+            </div>
+          )}
+
+          {/* 10. RESEARCH NOTES */}
+          {tab === 'research' && (
+            <div className="case-panel-v3">
+              <SectionTitle eyebrow="WORK PRODUCT" title="Research Notebook" />
+              <div className="notes-grid">
+                {notes.length ? (
+                  notes.map((n) => (
+                    <article className="research-note-v3" key={n.id}>
+                      <span>{n.kind}</span>
+                      <h4>{n.title}</h4>
+                      <p>{n.content}</p>
+                      <button
+                        className="btn-quiet danger-text"
+                        onClick={() =>
+                          run(async () => {
+                            await req(`/cases/${activeCase.id}/notes/${n.id}`, { method: 'DELETE' })
+                            await load()
+                            setToast({ type: 'success', text: 'Research note deleted.' })
+                          })
+                        }
+                      >
+                        Delete
+                      </button>
+                    </article>
+                  ))
+                ) : (
+                  <div className="empty-workspace">
+                    <div>♡</div>
+                    <h3>No saved research yet</h3>
+                    <p>Save useful Ask LEXAI answers to build a case notebook.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 11. MOOT COURT */}
+          {tab === 'moot' && (
+            <div className="case-panel-v3">
+              <SectionTitle eyebrow="ADVOCACY" title="Case-aware Moot Court" />
+              <div className="court-mini">
+                <div className="bench-mini">
+                  ⚖ <b>THE BENCH</b>
+                  <small>Case intelligence + relevant authorities</small>
+                </div>
+                <div className="counsel-row">
+                  <span>Petitioner / Prosecution</span>
+                  <span>Respondent / Defence</span>
+                </div>
+              </div>
+              <div className="argument-builder-v3">
+                <label>
+                  Issue / proposition
+                  <input
+                    value={issue}
+                    onChange={(e) => setIssue(e.target.value)}
+                    placeholder="Frame the issue the Bench should hear"
+                  />
+                </label>
+                <button
+                  className="btn-primary"
+                  disabled={issue.trim().length < 3 || busy}
+                  onClick={() =>
+                    run(async () =>
+                      setOut(
+                        await post(`/cases/${activeCase.id}/moot-court`, {
+                          issue: issue.trim(),
+                        })
+                      )
+                    )
+                  }
+                >
+                  Start case moot →
+                </button>
+              </div>
+              {out && render(out)}
+            </div>
+          )}
+
+          {/* 12. CASE BRIEF */}
+          {tab === 'brief' && (
+            <div className="case-panel-v3">
+              <SectionTitle eyebrow="WORK PRODUCT" title="Automatic Case Brief">
+                <button
+                  className="btn-primary"
+                  disabled={intelStatus !== 'ready'}
+                  onClick={() => run(async () => setOut(await post(`/cases/${activeCase.id}/brief`)))}
+                >
+                  Build from saved analysis
+                </button>
+              </SectionTitle>
+              <p className="muted">Rendered from cached Case Intelligence without another analysis call.</p>
+              {intelStatus !== 'ready' && <EmptyIntel onAnalyze={analyzeCase} />}
+              {out && render(out)}
+            </div>
+          )}
+
+          {/* 13. SETTINGS */}
+          {tab === 'settings' && (
+            <div className="case-panel-v3">
+              <SectionTitle eyebrow="CASE SETTINGS" title="Workspace controls" />
+              <div className="settings-card">
+                <h4>Private workspace</h4>
+                <p>
+                  This workspace is private and isolated to your account. All case PDFs are indexed with end-to-end provenance.
+                </p>
+              </div>
+              <div className="danger-zone">
+                <span className="eyebrow">DANGER ZONE</span>
+                <h4>Delete this case permanently</h4>
+                <p>Deletes private PDFs, the case index, cached intelligence and saved research.</p>
+                <button className="btn-danger" onClick={() => setDeleteConfirm(true)}>
+                  Delete Case
+                </button>
+              </div>
             </div>
           )}
         </main>
-
-        {/* ── RIGHT INTELLIGENCE PANEL ── */}
-        <aside className="workspace-intel-panel" aria-label="Case Intelligence Summary">
-          <div className="panel-section-title">
-            <span>INTELLIGENCE RADAR</span>
-            <span className={`status-dot ${intelStatus === 'ready' ? 'green' : 'amber'}`}>
-              {intelStatus === 'ready' ? 'Ready' : 'Outdated'}
-            </span>
-          </div>
-
-          {/* 1. Case Summary */}
-          <div className="intel-panel-card">
-            <span className="card-subhead">CASE SUMMARY</span>
-            <p className="summary-text">
-              {intel?.summary || 'Upload case files and click "Run Intelligence" to populate.'}
-            </p>
-          </div>
-
-          {/* 2. Litigating Parties */}
-          <div className="intel-panel-card">
-            <span className="card-subhead">PARTIES ({intel?.parties?.length || 0})</span>
-            {intel?.parties?.length > 0 ? (
-              <div className="tag-cloud">
-                {intel.parties.map((p, i) => (
-                  <span key={i} className="party-pill">
-                    <strong>{p.name || p.role}:</strong> {p.role || 'Litigant'}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <small className="muted-text">No parties identified yet.</small>
-            )}
-          </div>
-
-          {/* 3. Core Legal Issues */}
-          <div className="intel-panel-card">
-            <span className="card-subhead">LEGAL ISSUES ({intel?.legal_issues?.length || 0})</span>
-            {intel?.legal_issues?.length > 0 ? (
-              <ul className="mini-bullet-list">
-                {intel.legal_issues.slice(0, 4).map((issue, i) => (
-                  <li key={i}>{typeof issue === 'object' ? issue.issue : issue}</li>
-                ))}
-              </ul>
-            ) : (
-              <small className="muted-text">Issues not yet mapped.</small>
-            )}
-          </div>
-
-          {/* 4. Contradictions Alert */}
-          {intel?.contradictions?.length > 0 && (
-            <div className="intel-panel-card alert-card">
-              <span className="card-subhead alert-text">⚠️ CONTRADICTIONS ({intel.contradictions.length})</span>
-              <p className="alert-desc">Discrepancies found across witness accounts and filings.</p>
-              <button className="panel-btn" onClick={() => setTab('contradictions')}>
-                View Contradictions →
-              </button>
-            </div>
-          )}
-
-          {/* 5. Source Documents */}
-          <div className="intel-panel-card">
-            <span className="card-subhead">SOURCE EXHIBITS ({docs.length})</span>
-            <div className="mini-doc-list">
-              {docs.slice(0, 5).map((d) => (
-                <div key={d.id} className="mini-doc-row" onClick={() => openPdf(d)}>
-                  <span>📄 {d.name || d.original_name}</span>
-                  <small>View</small>
-                </div>
-              ))}
-            </div>
-          </div>
-        </aside>
       </div>
 
       {/* PDF Source Viewer Drawer */}
@@ -685,8 +1132,8 @@ export default function CaseWorkspace({
         <div className="pdf-drawer">
           <div className="pdf-drawer-head">
             <div>
-              <span className="eyebrow">SOURCE EXHIBIT INSPECTOR</span>
-              <h3>{viewer.name || viewer.original_name}</h3>
+              <span className="eyebrow">SOURCE DOCUMENT</span>
+              <h3>{viewer.name}</h3>
             </div>
             <button
               className="icon-btn"
@@ -696,12 +1143,68 @@ export default function CaseWorkspace({
                 setViewerUrl(null)
               }}
             >
-              ✕
+              ×
             </button>
           </div>
-          <iframe title={viewer.name || 'PDF Document'} src={viewerUrl} />
+          <iframe title={viewer.name} src={viewerUrl} />
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="modal-backdrop">
+          <div className="danger-modal">
+            <div className="danger-symbol">!</div>
+            <h2>Delete {activeCase.title}?</h2>
+            <p>This permanently removes the case, private PDFs, indexes, intelligence cache and notes.</p>
+            <label>
+              Type <b>DELETE</b> to confirm
+              <input autoFocus value={deleteText} onChange={(e) => setDeleteText(e.target.value)} />
+            </label>
+            <div className="modal-actions">
+              <button className="btn-quiet" onClick={() => setDeleteConfirm(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn-danger"
+                disabled={deleteText !== 'DELETE'}
+                onClick={async () => {
+                  await onDeleteCase?.()
+                  setDeleteConfirm(false)
+                }}
+              >
+                Delete permanently
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>
+  )
+}
+
+function EmptyIntel({ onAnalyze }) {
+  return (
+    <div className="empty-workspace">
+      <div>✦</div>
+      <h3>Case Intelligence required</h3>
+      <p>Analyze the case once to populate this section without repeated AI calls.</p>
+      <button className="btn-primary" onClick={onAnalyze}>
+        Analyze Case
+      </button>
+    </div>
+  )
+}
+
+function EmptyStructured({ title, text, onAnalyze }) {
+  return (
+    <div className="empty-workspace">
+      <div>○</div>
+      <h3>{title}</h3>
+      <p>{text}</p>
+      <button className="btn-primary" onClick={onAnalyze}>
+        Re-analyze Case
+      </button>
+    </div>
   )
 }

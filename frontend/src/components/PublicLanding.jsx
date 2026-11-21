@@ -10,8 +10,8 @@ export default function PublicLanding({ onRequireAuth, onSignIn, onCreateAccount
         <div className="public-brand">
           <div className="public-mark">⚖</div>
           <div>
-            <b>LEXAI SMART COURTROOM</b>
-            <small>LEGAL INTELLIGENCE OPERATING SYSTEM</small>
+            <b>LEXAI</b>
+            <small>LEGAL INTELLIGENCE · VERIFIED EVIDENCE</small>
           </div>
         </div>
         <div className="public-auth-actions">
@@ -22,118 +22,106 @@ export default function PublicLanding({ onRequireAuth, onSignIn, onCreateAccount
 
       <main className="public-main">
         <section className="public-hero">
-          <div className="hero-eyebrow-chip">
-            <span className="chip-pulse" />
-            <span>INDIAN JURISPRUDENCE · MULTI-AGENT TRIAL SIMULATION</span>
-          </div>
-
-          <h1 className="hero-headline">
+          <span className="hero-eyebrow">⚖ INDIAN LEGAL INTELLIGENCE SYSTEM</span>
+          <h1>
             Research. Verify.<br />
             Argue. <em>Decide.</em>
           </h1>
-
-          <p className="hero-subheading">
+          <p>
             Evidence-grounded legal intelligence for Indian law, powered by hybrid retrieval, verified citations, and agentic courtroom simulation.
           </p>
 
-          <div className="public-cta-group">
-            <button className="btn-hero-primary" onClick={gate('upload')}>
-              <span>📄 Start Legal Research</span>
-              <small>Upload judgment or case dossier →</small>
+          {/* Architecture & Trust Badges */}
+          <div className="public-badges">
+            <span>● Hybrid RAG (FAISS + BM25)</span>
+            <span>● Verified Citations & Grounds</span>
+            <span>● Corrective RAG (CRAG)</span>
+            <span>● Private Case Workspaces</span>
+            <span>● Multi-Agent Moot Court</span>
+          </div>
+
+          {/* Primary Action Tools */}
+          <div className="public-tools">
+            <button className="public-primary-upload" onClick={gate('upload')}>
+              <strong>📄 Start Legal Research</strong>
+              <small>Upload judgment, court order or case dossier · private indexing · page-level citation verification.</small>
+              <b>Upload & Research →</b>
             </button>
-            <button className="btn-hero-secondary" onClick={gate('moot')}>
-              <span>⚖️ Open Moot Court</span>
-              <small>5-Mode Human vs AI courtroom</small>
+            <button onClick={gate('moot')}>
+              <strong>⚖ Moot Court</strong>
+              <small>Practice arguments in 5 modes: Step in as Counsel or Judge against an adversarial AI Bench.</small>
+              <b>Try Moot Court →</b>
+            </button>
+            <button onClick={gate('draft')}>
+              <strong>✎ Legal Drafting & BNS</strong>
+              <small>BNS ↔ IPC transition analysis, notice scanner, and automated legal draft generator.</small>
+              <b>Start Drafting →</b>
             </button>
           </div>
 
-          {/* Architecture / Trust Strip */}
-          <div className="architecture-trust-strip" aria-label="System Capabilities">
-            <div className="trust-pill">
-              <span className="trust-dot blue" />
-              <span>Hybrid RAG (FAISS + BM25)</span>
-            </div>
-            <div className="trust-pill">
-              <span className="trust-dot green" />
-              <span>Verified Citations & Grounds</span>
-            </div>
-            <div className="trust-pill">
-              <span className="trust-dot purple" />
-              <span>Corrective RAG (CRAG)</span>
-            </div>
-            <div className="trust-pill">
-              <span className="trust-dot gold" />
-              <span>Private Case Workspaces</span>
-            </div>
-            <div className="trust-pill">
-              <span className="trust-dot red" />
-              <span>Multi-Agent Courtroom</span>
-            </div>
-          </div>
-
-          {/* Core Feature Matrix */}
-          <div className="feature-showcase-grid">
-            <div className="showcase-card" onClick={gate('cases')}>
-              <div className="card-top">
-                <span className="card-icon">🕸️</span>
-                <span className="card-tag">Case Intelligence</span>
+          {/* 6 Capabilities Matrix */}
+          <div className="public-capabilities-grid">
+            <div className="public-capability-card" onClick={gate('cases')}>
+              <div className="cap-header">
+                <span className="cap-icon">🕸️</span>
+                <span className="cap-tag">CASE INTELLIGENCE</span>
               </div>
               <h3>Evidence & Claim Graph</h3>
-              <p>Extracts legal issues, facts, witness testimonies, and statutory provisions into an interactive SVG knowledge graph with full source provenance.</p>
+              <p>Extracts legal issues, facts, witness statements, and statutes into an interactive relational graph with full source provenance.</p>
             </div>
 
-            <div className="showcase-card" onClick={gate('upload')}>
-              <div className="card-top">
-                <span className="card-icon">🎯</span>
-                <span className="card-tag">Calibrated RAG</span>
+            <div className="public-capability-card" onClick={gate('upload')}>
+              <div className="cap-header">
+                <span className="cap-icon">🎯</span>
+                <span className="cap-tag">CALIBRATED RAG</span>
               </div>
               <h3>Adaptive Confidence Engine</h3>
-              <p>Combines dense FAISS, BM25, and Cross-Encoder sigmoid calibration into verified high/medium/low confidence signals with safe refusal fallback.</p>
+              <p>Calibrates dense similarity, BM25, and Cross-Encoder logits into verified confidence actions with safe refusal fallback.</p>
             </div>
 
-            <div className="showcase-card" onClick={gate('moot')}>
-              <div className="card-top">
-                <span className="card-icon">🏛️</span>
-                <span className="card-tag">Adversarial Trial</span>
+            <div className="public-capability-card" onClick={gate('moot')}>
+              <div className="cap-header">
+                <span className="cap-icon">🏛️</span>
+                <span className="cap-tag">ADVERSARIAL TRIAL</span>
               </div>
               <h3>Interactive Moot Court</h3>
-              <p>Step in as Petitioner, Respondent, or Judge. Real-time courtroom speech dictation, live objections, and an 8-category judicial scorecard.</p>
+              <p>Speech-to-text dictation, real-time courtroom objections, chess clock timer, and an 8-category judicial scorecard.</p>
             </div>
 
-            <div className="showcase-card" onClick={gate('cases')}>
-              <div className="card-top">
-                <span className="card-icon">⏱️</span>
-                <span className="card-tag">Chronology</span>
+            <div className="public-capability-card" onClick={gate('cases')}>
+              <div className="cap-header">
+                <span className="cap-icon">⏱️</span>
+                <span className="cap-tag">CHRONOLOGY</span>
               </div>
               <h3>Automatic Case Timeline</h3>
-              <p>Automated extraction of FIRs, notices, arrests, and hearings. Disagreements between documents are automatically flagged as Date Conflicts.</p>
+              <p>Chronological legal milestones from FIRs to judgments with automated multi-document Date Conflict alerts.</p>
             </div>
 
-            <div className="showcase-card" onClick={gate('cases')}>
-              <div className="card-top">
-                <span className="card-icon">⚡</span>
-                <span className="card-tag">NLI Verification</span>
+            <div className="public-capability-card" onClick={gate('cases')}>
+              <div className="cap-header">
+                <span className="cap-icon">⚡</span>
+                <span className="cap-tag">NLI VERIFICATION</span>
               </div>
               <h3>Cross-Document Contradictions</h3>
-              <p>Semantic contradiction detector compares witness claims, dates, and amounts side-by-side with exact verbatim exhibit quotes.</p>
+              <p>Side-by-side comparison of conflicting witness statements, dates, and amounts with exact verbatim exhibit quotes.</p>
             </div>
 
-            <div className="showcase-card" onClick={gate('draft')}>
-              <div className="card-top">
-                <span className="card-icon">⚖️</span>
-                <span className="card-tag">Indian Law Suite</span>
+            <div className="public-capability-card" onClick={gate('draft')}>
+              <div className="cap-header">
+                <span className="cap-icon">⚖️</span>
+                <span className="cap-tag">INDIAN LAW SUITE</span>
               </div>
               <h3>BNS Lens & Legal Drafting</h3>
-              <p>Instant Bharatiya Nyaya Sanhita ↔ IPC mapping and automated drafting of legal notices, bail applications, and writ petitions.</p>
+              <p>Instant Bharatiya Nyaya Sanhita transition lookup and automated drafting of legal notices, petitions, and replies.</p>
             </div>
           </div>
 
-          {/* Security & Privacy Banner */}
+          {/* Security & Privacy Notice */}
           <section className="public-privacy">
-            <div className="lock-icon-wrap">🔒</div>
+            <div>🔒</div>
             <div>
-              <b>Strict Case Isolation & Evidentiary Privacy</b>
-              <p>Uploaded documents are encrypted and segregated to your private workspace. LexAI never leaks case facts or reasoning outside your authenticated session.</p>
+              <b>Your case files belong to your private workspace.</b>
+              <p>Sign in before uploading. LEXAI keeps case ownership strictly isolated to your account and verifies answers against uploaded evidence.</p>
             </div>
           </section>
         </section>

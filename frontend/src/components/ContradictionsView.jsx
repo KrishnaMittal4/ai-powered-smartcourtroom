@@ -1,4 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { apiFetch } from '../lib/auth.js'
+
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 const CATEGORY_NAMES = {
   dates: 'Dates & Chronology',
@@ -11,9 +14,27 @@ const CATEGORY_NAMES = {
   factual_claims: 'Factual Claims',
 }
 
-export default function ContradictionsView({ contradictionsData, onOpenDocument, loading = false }) {
+export default function ContradictionsView({ caseId, contradictionsData: propContradictionsData, onOpenDocument, loading: propLoading = false }) {
+  const [internalContradictionsData, setInternalContradictionsData] = useState(null)
+  const [internalLoading, setInternalLoading] = useState(false)
   const [activeCategory, setActiveCategory] = useState('ALL')
   const [statusFilter, setStatusFilter] = useState('ALL') // 'ALL', 'confirmed', 'possible'
+
+  useEffect(() => {
+    if (caseId && !propContradictionsData) {
+      setInternalLoading(true)
+      apiFetch(`${API_BASE}/cases/${caseId}/contradictions`)
+        .then((res) => res.json())
+        .then((data) => {
+          setInternalContradictionsData(data.contradictions || data)
+        })
+        .catch((err) => console.warn('Failed to load contradictions:', err))
+        .finally(() => setInternalLoading(false))
+    }
+  }, [caseId, propContradictionsData])
+
+  const contradictionsData = propContradictionsData || internalContradictionsData
+  const loading = propLoading || internalLoading
 
   const items = useMemo(() => contradictionsData?.contradictions || [], [contradictionsData])
   const summary = useMemo(() => contradictionsData?.summary || { total: 0, confirmed: 0, possible: 0 }, [contradictionsData])
