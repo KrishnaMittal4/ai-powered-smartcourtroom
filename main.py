@@ -27,7 +27,7 @@ from contextlib import asynccontextmanager
 logger = logging.getLogger(__name__)
 
 from llm_router import provider_status, call_groq, call_gemini, gemini_configured
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, UploadFile, File
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, UploadFile, File, Form
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -1407,3 +1407,96 @@ def human_counsel_reply(
     except Exception as e:
         logger.error(f"Human counsel reply failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Debate reply failed: {str(e)}")
+
+
+# ── PDF-Grounded Moot Court Endpoint ─────────────────────────────────────────
+
+@app.post("/moot-court/with-pdf")
+async def moot_court_with_pdf(
+    file: UploadFile = File(...),
+    dispute: str = Form(""),
+    trial_mode: str = Form("ai_vs_ai"),
+    user_role: str = Form("petitioner"),
+    user_argument: str = Form(""),
+    _rl: None = Depends(rate_limited("moot", "MOOT_RATE_PER_MIN", "MOOT_RATE_PER_DAY", 6, 100, use_global=False)),
+    user: dict = Depends(current_user),
+):
+    """Moot Court grounded entirely on an uploaded judgment PDF — zero global corpus dependency.
+    Uses PyMuPDF for fast in-memory extraction, BM25 dual retrieval, and LangGraph StateGraph."""
+    client = state.get("groq_client")
+    if not client and not gemini_configured():
+        raise HTTPException(status_code=503, detail="Configure GEMINI_API_KEY or GROQ_API_KEY to use the Moot Court.")
+
+    # 1. Read and validate PDF
+    contents = await file.read()
+    if not contents[:4] == b"%PDF":
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid PDF.")
+    if len(contents) > 30 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="PDF must be under 30 MB.")
+
+    # 2. Fast in-memory text extraction via PyMuPDF
+    try:
+        from moot_court_pdf_engine import fast_extract_judgment_pdf
+        pdf_data = fast_extract_judgment_pdf(contents, file.filename or "judgment.pdf")
+    except Exception as ex:
+        logger.error(f"PDF extraction failed: {ex}", exc_info=True)
+        raise HTTPException(status_code=422, detail=f"Could not extract text from PDF: {str(ex)}")
+
+    judgment_chunks = pdf_data.get("chunks", [])
+    judgment_meta = {
+        "filename": pdf_data.get("filename"),
+        "case_title": pdf_data.get("case_title"),
+        "court": pdf_data.get("court"),
+        "page_count": pdf_data.get("page_count"),
+        "total_chars": pdf_data.get("total_chars", 0),
+        "suggested_dispute": pdf_data.get("suggested_dispute", ""),
+    }
+
+    # 3. Determine effective dispute (use PDF-detected if none provided)
+    effective_dispute = dispute.strip() or pdf_data.get("suggested_dispute", "")
+    if not effective_dispute or len(effective_dispute) < 10:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not detect a legal dispute from the PDF. Please enter the dispute question manually.",
+        )
+
+    logger.info(
+        f"PDF-grounded moot court | file={file.filename} | pages={pdf_data.get('page_count')} | "
+        f"chunks={len(judgment_chunks)} | mode={trial_mode} | dispute={effective_dispute[:80]}"
+    )
+
+    try:
+        if trial_mode == "human_vs_ai":
+            if not user_argument or len(user_argument.strip()) < 15:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Human argument must be at least 15 characters for Human vs AI mode.",
+                )
+            return run_human_counsel_debate(
+                dispute=effective_dispute,
+                user_role=user_role,
+                user_argument=user_argument.strip(),
+                index=state.get("index"),
+                records=state.get("records") or [],
+                embed_model=state.get("embed_model"),
+                groq_client=client,
+                judgment_chunks=judgment_chunks,
+                judgment_meta=judgment_meta,
+                raw_judgment_text=pdf_data.get("raw_text"),
+            )
+        else:
+            return run_moot_court_debate(
+                dispute=effective_dispute,
+                index=state.get("index"),
+                records=state.get("records") or [],
+                embed_model=state.get("embed_model"),
+                groq_client=client,
+                judgment_chunks=judgment_chunks,
+                judgment_meta=judgment_meta,
+                raw_judgment_text=pdf_data.get("raw_text"),
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"PDF-grounded moot court failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Moot court simulation failed: {str(e)}")
