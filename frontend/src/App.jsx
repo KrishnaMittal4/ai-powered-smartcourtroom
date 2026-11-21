@@ -196,17 +196,17 @@ export default function App({ user, onLogout }) {
       const dDoc = await rDoc.json().catch(() => ({}))
       if (!rDoc.ok) throw new Error(dDoc.detail || 'Failed to upload and index document.')
 
-      // 3. Refresh and open directly into "Ask LEXAI" — case-only mode (no global corpus search)
+      // 3. Refresh cases and open directly into Overview with auto-analysis initiated
       await refreshCases()
-      setInitialCaseTab('ask')
+      setInitialCaseTab('overview')
       setInitialCaseMode('case')
       setActiveCaseId(newCaseId)
       setCasesOpen(false)
       setUploadStatus({
         type: 'success',
-        msg: `"${file.name}" uploaded and indexed! Ask any question below to verify citations.`
+        msg: `"${file.name}" uploaded! Starting automatic Case Intelligence analysis…`
       })
-      setAnnounce('Case PDF uploaded and indexed.')
+      setAnnounce('Case PDF uploaded. Automatic analysis starting.')
     } catch (err) {
       setError(err.message || 'Could not upload PDF.')
       setAnnounce('Upload failed.')
