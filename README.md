@@ -1,3 +1,4 @@
+https://ai-powered-smartcourtroom.vercel.app/
 # Smart Courtroom: Legal RAG with Checked Citations
 
 A research tool over Indian court judgments. Every answer is written **only from
