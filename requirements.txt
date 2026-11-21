@@ -23,6 +23,10 @@ langgraph>=0.2.0
 # ── Utilities ─────────────────────────────────────────────────────────────
 python-dotenv>=1.0.0
 reportlab>=4.2.0
+sentry-sdk[fastapi]>=2.0.0
+redis>=5.0.0
+pytest>=8.0.0
+bandit>=1.7.5
 
 # ── Optional OCR fallback for scanned/poor PDF pages ───────────────────────
 # Native PDFs do not require these at runtime. System Tesseract must also be

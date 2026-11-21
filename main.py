@@ -22,9 +22,13 @@ import logging
 import os
 import glob
 import threading
+import time
+import uuid
 from contextlib import asynccontextmanager
 
-logger = logging.getLogger(__name__)
+from observability import init_sentry, set_request_id, get_request_id, setup_logging
+
+logger = logging.getLogger("main")
 
 from llm_router import provider_status, call_groq, call_gemini, gemini_configured
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, UploadFile, File, Form
@@ -97,6 +101,7 @@ def _require_developer_tools():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- startup ---
+    init_sentry()
     init_auth_db()
     init_case_db()
     init_intelligence_db()
@@ -183,10 +188,45 @@ else:
 
 
 
+# Structured Logging Setup
+setup_logging(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    json_format=os.getenv("LOG_JSON", "true" if LEXAI_ENV == "production" else "false").lower() in {"1", "true", "yes"}
+)
+
+@app.middleware("http")
+async def request_correlation_and_logging_middleware(request: Request, call_next):
+    req_id = request.headers.get("x-request-id") or f"req_{uuid.uuid4().hex[:12]}"
+    set_request_id(req_id)
+    start_time = time.monotonic()
+    
+    response = await call_next(request)
+    
+    latency_ms = round((time.monotonic() - start_time) * 1000, 2)
+    response.headers["X-Request-ID"] = req_id
+    
+    # Avoid log flooding from periodic ping/liveness checks unless an error occurs
+    if request.url.path not in ("/ping", "/health/live") or response.status_code >= 400:
+        logger.info(
+            f"{request.method} {request.url.path} -> {response.status_code} ({latency_ms}ms)",
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "latency_ms": latency_ms,
+                "client_ip": request.client.host if request.client else "unknown",
+            }
+        )
+    return response
+
+
 @app.middleware("http")
 async def require_signed_in_user(request: Request, call_next):
     path = request.url.path
-    public = path in {"/", "/health", "/ping", "/docs", "/openapi.json", "/redoc"} or path.startswith("/auth/")
+    public = (
+        path in {"/", "/health", "/health/live", "/health/ready", "/ping", "/docs", "/openapi.json", "/redoc"}
+        or path.startswith("/auth/")
+    )
     if not public and request.method != "OPTIONS":
         try:
             current_user(request)
@@ -420,6 +460,64 @@ def health():
     return {"status": "ok", "environment": LEXAI_ENV, "render_free_mode": RENDER_FREE_MODE,
             "embedding_mode": embedding_mode,
             "storage": {"persistent": bool(supabase_repo.enabled() and supabase_repo.configured()) or not RENDER_FREE_MODE, "mode": "supabase" if supabase_repo.enabled() else ("ephemeral-demo" if RENDER_FREE_MODE else "local"), "supabase": supabase_repo.health()}, "limits": {"max_upload_files": MAX_UPLOAD_FILES, "max_upload_mb": MAX_UPLOAD_MB}, "capabilities": {"global_judgment_corpus": bool(GLOBAL_CORPUS_ENABLED and state.get("index") is not None), "private_case_rag": True, "developer_tools": DEVELOPER_TOOLS_ENABLED, "cross_encoder": bool(state.get("reranker") is not None), "low_memory_mode": LOW_MEMORY_MODE, "ocr": os.getenv("OCR_ENABLED","true").lower() in {"1","true","yes","on"}}, **runtime_diagnostics(len(state.get("records", [])), provider_status())}
+
+
+@app.get("/health/live")
+def health_live():
+    """Liveness probe: verifies the FastAPI process is alive and receiving HTTP requests.
+    Zero disk, DB, or AI calls."""
+    return {"status": "alive", "timestamp": time.time(), "environment": LEXAI_ENV}
+
+
+@app.get("/health/ready")
+def health_ready():
+    """Readiness probe: validates local storage, database accessibility, and configurations
+    without invoking external LLMs or burning quota."""
+    readiness = {
+        "status": "ready",
+        "database": True,
+        "storage": True,
+        "environment": LEXAI_ENV,
+        "render_free_mode": RENDER_FREE_MODE,
+    }
+    checks = {}
+
+    # 1. Check storage writable
+    test_dir = os.path.join(os.getcwd(), "cases_storage")
+    try:
+        os.makedirs(test_dir, exist_ok=True)
+        test_file = os.path.join(test_dir, ".health_check_tmp")
+        with open(test_file, "w") as f:
+            f.write("ok")
+        os.remove(test_file)
+        checks["storage_write"] = "ok"
+    except Exception as e:
+        checks["storage_write"] = f"error: {e}"
+        readiness["storage"] = False
+        readiness["status"] = "degraded"
+
+    # 2. Check Database connectivity
+    try:
+        if supabase_repo.enabled() and supabase_repo.configured():
+            db_health = supabase_repo.health()
+            checks["database"] = db_health
+            if db_health.get("status") == "error":
+                readiness["database"] = False
+                readiness["status"] = "degraded"
+        else:
+            import sqlite3
+            conn = sqlite3.connect(os.getenv("CASE_DB_PATH", "cases.db"))
+            conn.cursor().execute("SELECT 1")
+            conn.close()
+            checks["database"] = "sqlite_connected"
+    except Exception as e:
+        checks["database"] = f"error: {e}"
+        readiness["database"] = False
+        readiness["status"] = "degraded"
+
+    readiness["checks"] = checks
+    status_code = 200 if readiness["status"] in ("ready", "degraded") else 503
+    return JSONResponse(status_code=status_code, content=readiness)
 
 
 @app.api_route("/ping", methods=["GET", "HEAD"])

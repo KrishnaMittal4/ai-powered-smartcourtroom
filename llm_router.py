@@ -1,15 +1,21 @@
-"""Central provider/model routing for LEXAI.
+"""Central provider/model routing for LEXAI with Circuit Breaker and Exponential Backoff.
 
-Keeps Gemini/Groq model IDs, retries and truthful provider metadata in one place.
+Keeps Gemini/Groq model IDs, retries, circuit breaking, and truthful provider metadata in one place.
 Gemini is preferred for independent verification/structured extraction and judicial
 reasoning; Groq is the resilience fallback when a Groq client is supplied.
 """
 from __future__ import annotations
 
+import logging
 import os
 import random
+import threading
 import time
 from typing import Optional, Any
+
+from observability import log_llm_event
+
+logger = logging.getLogger("llm_router")
 
 GEMINI_VERIFY_MODEL = os.getenv("GEMINI_VERIFY_MODEL", "gemini-1.5-flash-8b")
 GEMINI_EXTRACTION_MODEL = os.getenv("GEMINI_EXTRACTION_MODEL", "gemini-1.5-flash-8b")
@@ -40,13 +46,81 @@ TASK_PRIMARY = {
 _TRANSIENT = (
     "429", "500", "502", "503", "504", "unavailable", "high demand",
     "resource_exhausted", "rate limit", "rate_limit", "timeout", "temporarily",
-    "deadline exceeded", "internal",
+    "deadline exceeded", "internal", "overloaded", "server error"
 )
 
 
-def is_transient_error(exc: Exception) -> bool:
+def is_transient_error(exc: Exception | str) -> bool:
     text = str(exc).lower()
     return any(marker in text for marker in _TRANSIENT)
+
+
+class CircuitBreaker:
+    """Lightweight in-memory Circuit Breaker to prevent hammering failing LLM providers.
+    
+    States:
+    - CLOSED: Normal operation, requests are permitted.
+    - OPEN: Failing repeatedly; calls are short-circuited to fallback.
+    - HALF_OPEN: Cooldown expired; allowing one probe request to test recovery.
+    """
+
+    def __init__(self, name: str, failure_threshold: int = 3, cooldown_seconds: float = 45.0):
+        self.name = name
+        self.failure_threshold = failure_threshold
+        self.cooldown_seconds = cooldown_seconds
+        self.state = "CLOSED"
+        self.failure_count = 0
+        self.last_failure_time = 0.0
+        self._lock = threading.Lock()
+
+    def can_attempt(self) -> bool:
+        with self._lock:
+            now = time.monotonic()
+            if self.state == "CLOSED":
+                return True
+            if self.state == "OPEN":
+                if now - self.last_failure_time >= self.cooldown_seconds:
+                    self.state = "HALF_OPEN"
+                    logger.info("Circuit breaker [%s] entered HALF_OPEN state (probing recovery)", self.name)
+                    return True
+                return False
+            # HALF_OPEN: allow probe
+            return True
+
+    def record_success(self) -> None:
+        with self._lock:
+            if self.state != "CLOSED":
+                logger.info("Circuit breaker [%s] recovered -> CLOSED", self.name)
+            self.state = "CLOSED"
+            self.failure_count = 0
+
+    def record_failure(self, is_transient: bool = True) -> None:
+        if not is_transient:
+            # Deterministic errors (e.g. invalid auth / 400) shouldn't trip circuit for all calls
+            return
+        with self._lock:
+            self.failure_count += 1
+            self.last_failure_time = time.monotonic()
+            if self.state in ("CLOSED", "HALF_OPEN") and self.failure_count >= self.failure_threshold:
+                self.state = "OPEN"
+                logger.warning(
+                    "Circuit breaker [%s] tripped -> OPEN (%d consecutive transient failures). Cooldown: %ss",
+                    self.name, self.failure_count, self.cooldown_seconds
+                )
+
+    def status(self) -> dict:
+        with self._lock:
+            return {
+                "state": self.state,
+                "failure_count": self.failure_count,
+                "threshold": self.failure_threshold,
+                "cooldown_seconds": self.cooldown_seconds,
+            }
+
+
+# Dedicated circuit breakers for the two external providers
+groq_circuit = CircuitBreaker("groq", failure_threshold=int(os.getenv("CIRCUIT_BREAKER_FAILURES", "3")), cooldown_seconds=float(os.getenv("CIRCUIT_BREAKER_COOLDOWN", "45.0")))
+gemini_circuit = CircuitBreaker("gemini", failure_threshold=int(os.getenv("CIRCUIT_BREAKER_FAILURES", "3")), cooldown_seconds=float(os.getenv("CIRCUIT_BREAKER_COOLDOWN", "45.0")))
 
 
 def gemini_configured() -> bool:
@@ -54,7 +128,7 @@ def gemini_configured() -> bool:
 
 
 def provider_status() -> dict:
-    """Configuration health only: never burns provider quota just to render /health."""
+    """Configuration health and circuit breaker status: never burns provider quota."""
     gemini_sdk = True
     gemini_sdk_error = None
     try:
@@ -70,11 +144,13 @@ def provider_status() -> dict:
             "verify_model": GEMINI_VERIFY_MODEL,
             "extraction_model": GEMINI_EXTRACTION_MODEL,
             "reasoning_model": GEMINI_REASONING_MODEL,
+            "circuit": gemini_circuit.status(),
         },
         "groq": {
             "configured": bool(os.getenv("GROQ_API_KEY")),
             "primary_model": GROQ_PRIMARY_MODEL,
             "fallback_model": GROQ_FALLBACK_MODEL,
+            "circuit": groq_circuit.status(),
         },
     }
 
@@ -92,6 +168,13 @@ def call_gemini(
     if not key:
         return {"ok": False, "provider": "gemini", "error": "GEMINI_API_KEY not set", "attempts": 0}
 
+    if not gemini_circuit.can_attempt():
+        return {
+            "ok": False, "provider": "gemini",
+            "error": "Gemini circuit breaker OPEN (temporarily suspended due to repeated failures)",
+            "circuit_open": True, "attempts": 0
+        }
+
     model = {
         "verify": GEMINI_VERIFY_MODEL,
         "extract": GEMINI_EXTRACTION_MODEL,
@@ -105,14 +188,15 @@ def call_gemini(
         return {"ok": False, "provider": "gemini", "model": model, "error": f"Gemini SDK/configuration unavailable: {exc}", "attempts": 0}
 
     last_error = "Gemini call failed"
+    call_start = time.time()
     n = max(1, min(attempts, len(base_delays)))
+
     for idx in range(n):
         delay = base_delays[idx]
         if delay:
-            # small jitter prevents several concurrent citation checks retrying together
-            time.sleep(delay + random.uniform(0.0, 0.35))
+            # Exponential backoff jitter
+            time.sleep(delay + random.uniform(0.05, 0.35))
         try:
-            
             kwargs = {"model": model, "contents": prompt}
             if max_tokens is not None:
                 try:
@@ -123,12 +207,21 @@ def call_gemini(
             response = client.models.generate_content(**kwargs)
             text = (getattr(response, "text", None) or "").strip()
             if text:
+                gemini_circuit.record_success()
+                latency_ms = (time.time() - call_start) * 1000
+                log_llm_event(logger, "gemini", model=model, latency_ms=latency_ms, attempt=idx + 1, status="success")
                 return {"ok": True, "text": text, "provider": "gemini", "model": model, "attempts": idx + 1, "independent_provider": True}
             last_error = "Gemini returned an empty response"
         except Exception as exc:
             last_error = str(exc)
-            if not is_transient_error(exc):
+            transient = is_transient_error(exc)
+            gemini_circuit.record_failure(is_transient=transient)
+            if not transient:
+                # Do not retry deterministic client errors (e.g. 400 Bad Request, invalid key)
                 break
+
+    latency_ms = (time.time() - call_start) * 1000
+    log_llm_event(logger, "gemini", model=model, latency_ms=latency_ms, attempt=idx + 1, status="failed", error=last_error)
     return {"ok": False, "provider": "gemini", "model": model, "error": last_error, "attempts": idx + 1, "independent_provider": False}
 
 
@@ -143,9 +236,22 @@ def call_groq(
 ) -> dict:
     if client is None:
         return {"ok": False, "provider": "groq", "error": "Groq client unavailable"}
+
+    if not groq_circuit.can_attempt():
+        return {
+            "ok": False, "provider": "groq",
+            "error": "Groq circuit breaker OPEN (temporarily suspended due to repeated failures)",
+            "circuit_open": True, "attempts": 0
+        }
+
     model_list = models or [GROQ_PRIMARY_MODEL, GROQ_FALLBACK_MODEL]
     last_error = "Groq call failed"
-    for model in model_list:
+    call_start = time.time()
+
+    for idx, model in enumerate(model_list):
+        if idx > 0:
+            # Backoff before attempting fallback model
+            time.sleep(0.5 + random.uniform(0.05, 0.25))
         try:
             messages = []
             if system_prompt:
@@ -158,10 +264,21 @@ def call_groq(
             )
             text = (resp.choices[0].message.content or "").strip()
             if text:
-                return {"ok": True, "text": text, "provider": "groq", "model": model, "attempts": 1, "independent_provider": False}
+                groq_circuit.record_success()
+                latency_ms = (time.time() - call_start) * 1000
+                log_llm_event(logger, "groq", model=model, latency_ms=latency_ms, attempt=idx + 1, fallback_used=(idx > 0), status="success")
+                return {"ok": True, "text": text, "provider": "groq", "model": model, "attempts": idx + 1, "independent_provider": False}
             last_error = f"{model} returned an empty response"
         except Exception as exc:
             last_error = str(exc)
+            transient = is_transient_error(exc)
+            groq_circuit.record_failure(is_transient=transient)
+            if not transient:
+                # Do not cascade across models if deterministic client error
+                break
+
+    latency_ms = (time.time() - call_start) * 1000
+    log_llm_event(logger, "groq", model=model_list[-1], latency_ms=latency_ms, attempt=len(model_list), status="failed", error=last_error)
     return {"ok": False, "provider": "groq", "error": last_error, "model": model_list[-1], "independent_provider": False}
 
 
@@ -189,7 +306,7 @@ def route_task(
     task: str, prompt: str, *, groq_client: Any = None, system_prompt: str | None = None,
     purpose: str | None = None, temperature: float = 0.1, max_tokens: int | None = None,
 ) -> dict:
-    """Task-aware Groq/Gemini routing with cross-provider fallback and truthful metadata."""
+    """Task-aware Groq/Gemini routing with cross-provider fallback, circuit breakers, and truthful metadata."""
     task = (task or "general").lower()
     budget = int(max_tokens or TASK_TOKEN_BUDGETS.get(task, 800))
     primary = TASK_PRIMARY.get(task, "groq")
@@ -197,6 +314,7 @@ def route_task(
     combined = prompt if not system_prompt else f"{system_prompt}\n\n---\n\n{prompt}"
     errors = []
     started = time.time()
+
     if primary == "gemini":
         first = call_gemini(combined, purpose=gem_purpose, max_tokens=budget, temperature=temperature)
         if first.get("ok"):
@@ -211,8 +329,13 @@ def route_task(
             return first
         errors.append(f"Groq: {first.get('error')}")
         second = call_gemini(combined, purpose=gem_purpose, max_tokens=budget, temperature=temperature)
+
     if second.get("ok"):
         second.update({"task": task, "primary_provider": primary, "fallback_used": True, "fallback_reason": errors[-1], "token_budget": budget, "latency_ms": round((time.time()-started)*1000,1)})
         return second
+
     errors.append(f"{second.get('provider','fallback')}: {second.get('error')}")
-    return {"ok": False, "task": task, "primary_provider": primary, "fallback_used": True, "token_budget": budget, "error": " | ".join(errors), "latency_ms": round((time.time()-started)*1000,1)}
+    return {
+        "ok": False, "task": task, "primary_provider": primary, "fallback_used": True,
+        "token_budget": budget, "error": " | ".join(errors), "latency_ms": round((time.time()-started)*1000,1)
+    }
