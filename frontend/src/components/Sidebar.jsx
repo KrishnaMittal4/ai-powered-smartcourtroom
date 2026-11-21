@@ -18,7 +18,7 @@ export default function Sidebar({ history, activeId, onOpen, onNew, onToggleSave
         <span className="side-label">{appMode === 'citizen' ? 'CITIZEN LEGAL TOOLS' : 'ADVOCATE WORKSPACE'}</span>
         {appMode === 'research' && (
           <>
-            <button onClick={()=>{(globalCorpusAvailable ? onGlobal : onUploadResearch)?.();onClose()}}>⌕ <span>{globalCorpusAvailable ? 'Global Research' : 'Document Research'}</span></button>
+            <button onClick={()=>{onUploadResearch?.();onClose()}}>📄 <span>Document Research</span></button>
             <button onClick={()=>{onCases?.();onClose()}}>▣ <span>My Cases</span></button>
             <button onClick={()=>{onMoot?.();onClose()}}>⚖ <span>Moot Court</span></button>
           </>
@@ -28,9 +28,9 @@ export default function Sidebar({ history, activeId, onOpen, onNew, onToggleSave
         <button onClick={()=>{onDraft?.();onClose()}}>✎ <span>Legal Drafting</span></button>
       </nav>
       <span className="side-label">RESEARCH</span>
-      <button className="new-btn" onClick={() => { (globalCorpusAvailable ? onNew : onUploadResearch)?.(); onClose() }}>
+      <button className="new-btn" onClick={() => { onUploadResearch?.(); onClose() }}>
         <span>＋</span>
-        <span>{globalCorpusAvailable ? 'New Research' : 'Upload & Research'}</span>
+        <span>Upload & Research</span>
       </button>
 
       <div className="tabs" role="tablist" aria-label="History" onKeyDown={(e) => tabKeys(e, ['recent', 'saved'], tab, setTab, 'hs')}>

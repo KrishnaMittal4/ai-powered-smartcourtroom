@@ -1255,19 +1255,16 @@ def simulate_moot_court(
     req: MootCourtRequest,
     _rl: None = Depends(rate_limited("moot", "MOOT_RATE_PER_MIN", "MOOT_RATE_PER_DAY", 6, 100, use_global=False)),
 ):
-    """Run an adversarial moot court debate: Petitioner (Groq) vs Respondent (Groq) vs Bench (Gemini) orchestrated via LangGraph StateGraph."""
+    """Run an adversarial moot court debate: Petitioner vs Respondent vs Bench."""
     client = state.get("groq_client")
     if not client and not gemini_configured():
         raise HTTPException(status_code=503, detail="Configure GEMINI_API_KEY or GROQ_API_KEY")
-    # Global corpus required for full moot court; gracefully degrade in production if not available.
-    if state.get("index") is None:
-        raise HTTPException(status_code=503, detail="Moot court simulation requires the global judgment corpus, which is not enabled in this deployment. Use the Case-aware Moot Court inside a Private Case workspace instead.")
     try:
         return run_moot_court_debate(
             dispute=req.dispute,
-            index=state["index"],
-            records=state["records"],
-            embed_model=state["embed_model"],
+            index=state.get("index"),
+            records=state.get("records") or [],
+            embed_model=state.get("embed_model"),
             groq_client=client,
             use_graph=req.use_graph,
         )
@@ -1285,15 +1282,13 @@ def simulate_moot_court_graph(
     client = state.get("groq_client")
     if not client and not gemini_configured():
         raise HTTPException(status_code=503, detail="Configure GEMINI_API_KEY or GROQ_API_KEY")
-    if state.get("index") is None:
-        raise HTTPException(status_code=503, detail="Moot court simulation requires the global judgment corpus, which is not enabled in this deployment.")
     try:
         from graphs.moot_court_graph import run_moot_court_graph
         return run_moot_court_graph(
             dispute=req.dispute,
-            index=state["index"],
-            records=state["records"],
-            embed_model=state["embed_model"],
+            index=state.get("index"),
+            records=state.get("records") or [],
+            embed_model=state.get("embed_model"),
             groq_client=client,
         )
     except Exception as e:
@@ -1347,16 +1342,14 @@ def human_vs_ai_moot_court(
     client = state.get("groq_client")
     if not client and not gemini_configured():
         raise HTTPException(status_code=503, detail="Configure GEMINI_API_KEY or GROQ_API_KEY")
-    if state.get("index") is None:
-        raise HTTPException(status_code=503, detail="Human vs AI moot court requires the global judgment corpus, which is not enabled in this deployment.")
     try:
         return run_human_counsel_debate(
             dispute=req.dispute,
             user_role=req.user_role,
             user_argument=req.user_argument,
-            index=state["index"],
-            records=state["records"],
-            embed_model=state["embed_model"],
+            index=state.get("index"),
+            records=state.get("records") or [],
+            embed_model=state.get("embed_model"),
             groq_client=client,
         )
     except Exception as e:
@@ -1381,8 +1374,6 @@ def human_counsel_reply(
     client = state.get("groq_client")
     if not client and not gemini_configured():
         raise HTTPException(status_code=503, detail="Configure GEMINI_API_KEY or GROQ_API_KEY")
-    if state.get("index") is None:
-        raise HTTPException(status_code=503, detail="Multi-turn moot court requires the global judgment corpus, which is not enabled in this deployment.")
     try:
         return reply_human_counsel(
             dispute=req.dispute,
@@ -1390,9 +1381,9 @@ def human_counsel_reply(
             user_reply=req.user_reply,
             round_number=req.round_number,
             prior_exchange=req.prior_exchange,
-            index=state["index"],
-            records=state["records"],
-            embed_model=state["embed_model"],
+            index=state.get("index"),
+            records=state.get("records") or [],
+            embed_model=state.get("embed_model"),
             groq_client=client,
         )
     except Exception as e:
