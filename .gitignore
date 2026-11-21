@@ -1,0 +1,71 @@
+# Secrets / local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Research-only global judgment corpus and indexes (NEVER deploy/commit)
+judgments/
+corpus/
+data/judgments/
+index_store/
+index_store_backup_*/
+faiss_index/
+bm25_index/
+benchmarks/
+benchmark_data/
+lexai-rag-results*.json
+lexai-rag-results*.csv
+*rag-benchmark*.json
+*rag-benchmark*.csv
+
+# Private runtime data (must live on persistent storage in production)
+runtime_data/
+user_case_files/
+user_case_indexes/
+uploads/
+private_cases/
+*.db
+*.db-shm
+*.db-wal
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+build/
+dist/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+frontend/*.timestamp-*.mjs
+
+# Logs / temp
+*.log
+scratch/
+tmp/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Supabase local CLI state / credentials
+.supabase/
+supabase/.temp/
+
+# Never commit production secrets
+*.pem
+*.key
+!.env.development.example
+!.env.production.example
+!frontend/.env.development.example
+!frontend/.env.production.example

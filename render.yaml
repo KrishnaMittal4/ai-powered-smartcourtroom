@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: lexai-api
+    runtime: python
+    plan: free
+    buildCommand: pip install --no-cache-dir -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.10.14"
+      - key: LEXAI_ENV
+        value: production
+      - key: LEXAI_RENDER_FREE_MODE
+        value: "true"
+      - key: LEXAI_LOW_MEMORY_MODE
+        value: "true"
+      - key: LEXAI_STORAGE_BACKEND
+        value: supabase
+      - key: GLOBAL_JUDGMENT_CORPUS_ENABLED
+        value: "false"
+      - key: ENABLE_DEVELOPER_TOOLS
+        value: "false"
+      - key: SUPABASE_URL
+        value: "https://rcxxoiabbeownibeorkm.supabase.co"
+      - key: SUPABASE_STORAGE_BUCKET
+        value: lexai-private
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: MAX_UPLOAD_FILES
+        value: "5"
+      - key: MAX_UPLOAD_MB
+        value: "8"
+      - key: RATE_LIMIT_PER_MIN
+        value: "5"
+      - key: RATE_LIMIT_PER_DAY
+        value: "60"
+      - key: GROQ_MAX_OUTPUT_TOKENS
+        value: "700"
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AUTH_SECRET
+        sync: false
+      - key: ADMIN_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
