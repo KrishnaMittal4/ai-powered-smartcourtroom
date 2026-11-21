@@ -180,6 +180,7 @@ export default function CaseWorkspace({
   const [issueMap, setIssueMap] = useState(null)
   const [issueMapStatus, setIssueMapStatus] = useState('missing')
   const [analysisStage, setAnalysisStage] = useState('')
+  const [analysisProgress, setAnalysisProgress] = useState(null) // { stage, stage_label, progress_pct, status }
 
   const input = useRef()
 
@@ -264,6 +265,7 @@ export default function CaseWorkspace({
     } finally {
       setBusy(false)
       setAnalysisStage('')
+      setAnalysisProgress(null)
     }
   }
 
@@ -282,6 +284,7 @@ export default function CaseWorkspace({
   const analyzeCase = () =>
     run(async () => {
       setAnalysisStage('Waking analysis service…')
+      setAnalysisProgress({ stage: 'queued', stage_label: 'Queued', progress_pct: 0, status: 'queued' })
       setToast({
         type: 'info',
         text: 'Starting Case Intelligence… Your existing analysis will stay visible until the update succeeds.',
@@ -297,7 +300,13 @@ export default function CaseWorkspace({
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 2200))
         const j = await req(`/cases/${activeCase.id}/intelligence/status/${jobId}`)
-        setAnalysisStage(j.message || j.stage || 'Analyzing case…')
+        setAnalysisStage(j.stage_label || j.message || j.stage || 'Analyzing case…')
+        setAnalysisProgress({
+          stage: j.stage || 'processing',
+          stage_label: j.stage_label || j.message || 'Analyzing…',
+          progress_pct: j.progress_pct ?? null,
+          status: j.status,
+        })
         if (j.status === 'completed') {
           finalJob = j
           break
@@ -317,6 +326,7 @@ export default function CaseWorkspace({
           : 'Case Intelligence ready. Timeline, Evidence, Contradictions and Brief are cached.',
       })
       setAnalysisStage('')
+      setAnalysisProgress(null)
     })
 
   const buildIssueMap = () =>
@@ -506,6 +516,77 @@ export default function CaseWorkspace({
                 >
                   {busy ? analysisStage || 'Analyzing case…' : intelStatus === 'ready' ? '↻ Re-analyze Case' : '✦ Analyze Case'}
                 </button>
+
+                {/* Real-time job progress panel */}
+                {busy && analysisProgress && (
+                  <div className="job-progress-panel" style={{
+                    marginTop: '1rem',
+                    padding: '1rem',
+                    borderRadius: '10px',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--rule)',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--gold)' }}>CASE PROCESSING</span>
+                      {analysisProgress.progress_pct != null && (
+                        <span style={{ fontSize: '0.8rem', color: 'var(--ink)', opacity: 0.7 }}>
+                          {analysisProgress.progress_pct}%
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Stage steps */}
+                    {[
+                      { key: 'preparing_documents',  label: 'Document Preparation' },
+                      { key: 'extracting_text',       label: 'Text Extraction' },
+                      { key: 'chunking_embeddings',   label: 'Chunking & Embeddings' },
+                      { key: 'retrieving_context',    label: 'Context Retrieval' },
+                      { key: 'generating_analysis',   label: 'AI Analysis' },
+                      { key: 'normalizing',           label: 'Validation' },
+                    ].map((s) => {
+                      const stages = ['preparing_documents','extracting_text','chunking_embeddings','retrieving_context','generating_analysis','normalizing','completed']
+                      const curIdx = stages.indexOf(analysisProgress.stage)
+                      const stepIdx = stages.indexOf(s.key)
+                      const isDone = curIdx > stepIdx
+                      const isActive = curIdx === stepIdx
+                      return (
+                        <div key={s.key} style={{
+                          display: 'flex', alignItems: 'center', gap: '0.6rem',
+                          padding: '0.3rem 0',
+                          borderBottom: '1px solid var(--rule)',
+                          opacity: isDone ? 1 : isActive ? 1 : 0.4,
+                        }}>
+                          <span style={{ fontSize: '1rem', width: '1.2rem', textAlign: 'center' }}>
+                            {isDone ? '✓' : isActive ? '●' : '○'}
+                          </span>
+                          <span style={{
+                            fontSize: '0.82rem',
+                            fontWeight: isActive ? 600 : 400,
+                            color: isDone ? 'var(--gold)' : isActive ? 'var(--ink)' : 'var(--ink)',
+                          }}>
+                            {s.label}
+                          </span>
+                        </div>
+                      )
+                    })}
+
+                    {/* Progress bar */}
+                    {analysisProgress.progress_pct != null && (
+                      <div style={{
+                        marginTop: '0.75rem', height: '4px',
+                        background: 'var(--rule)', borderRadius: '2px', overflow: 'hidden'
+                      }}>
+                        <div style={{
+                          width: `${analysisProgress.progress_pct}%`,
+                          height: '100%',
+                          background: 'var(--gold)',
+                          transition: 'width 0.5s ease',
+                          borderRadius: '2px',
+                        }} />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="metric-grid">

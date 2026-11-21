@@ -67,6 +67,8 @@ from case_law_mapping import init_issue_map_db, get_issue_map, build_issue_map
 from rag_evaluation import inspect_query, evaluate as evaluate_retrieval, generate_benchmark, generate_realistic_benchmark
 from benchmark_runner import start as start_benchmark_job, get as get_benchmark_job, cancel as cancel_benchmark_job, result as benchmark_job_result
 from case_analysis_jobs import start as start_case_analysis_job, get as get_case_analysis_job
+from redis_client import redis_health, get_redis
+from rag_cache import get_public_cache, set_public_cache, cache_stats, invalidate_private_case
 import supabase_repository as supabase_repo
 
 
@@ -318,7 +320,13 @@ def case_documents(case_id: str, user: dict = Depends(current_user)):
 @app.post("/cases/{case_id}/documents")
 async def case_documents_upload(case_id: str, files: list[UploadFile] = File(...), user: dict = Depends(current_user)):
     if len(files) > MAX_UPLOAD_FILES: raise HTTPException(400, f"Upload at most {MAX_UPLOAD_FILES} files at once.")
-    return {"documents": await save_documents(user["id"], case_id, files, MAX_UPLOAD_MB)}
+    result = {"documents": await save_documents(user["id"], case_id, files, MAX_UPLOAD_MB)}
+    # Invalidate any cached private-case query responses after new documents uploaded
+    try:
+        invalidate_private_case(user["id"], case_id)
+    except Exception:
+        pass
+    return result
 
 
 @app.post("/cases/load-sample")
@@ -459,6 +467,8 @@ def health():
     embedding_mode = "gemini-embedding-001" if _USE_GEMINI_EMBED else "all-MiniLM-L6-v2"
     return {"status": "ok", "environment": LEXAI_ENV, "render_free_mode": RENDER_FREE_MODE,
             "embedding_mode": embedding_mode,
+            "cache": cache_stats(),
+            "redis": redis_health(),
             "storage": {"persistent": bool(supabase_repo.enabled() and supabase_repo.configured()) or not RENDER_FREE_MODE, "mode": "supabase" if supabase_repo.enabled() else ("ephemeral-demo" if RENDER_FREE_MODE else "local"), "supabase": supabase_repo.health()}, "limits": {"max_upload_files": MAX_UPLOAD_FILES, "max_upload_mb": MAX_UPLOAD_MB}, "capabilities": {"global_judgment_corpus": bool(GLOBAL_CORPUS_ENABLED and state.get("index") is not None), "private_case_rag": True, "developer_tools": DEVELOPER_TOOLS_ENABLED, "cross_encoder": bool(state.get("reranker") is not None), "low_memory_mode": LOW_MEMORY_MODE, "ocr": os.getenv("OCR_ENABLED","true").lower() in {"1","true","yes","on"}}, **runtime_diagnostics(len(state.get("records", [])), provider_status())}
 
 
@@ -514,6 +524,9 @@ def health_ready():
         checks["database"] = f"error: {e}"
         readiness["database"] = False
         readiness["status"] = "degraded"
+
+    # 3. Check Redis (optional — degraded, not failed, if unavailable)
+    checks["redis"] = redis_health()
 
     readiness["checks"] = checks
     status_code = 200 if readiness["status"] in ("ready", "degraded") else 503
