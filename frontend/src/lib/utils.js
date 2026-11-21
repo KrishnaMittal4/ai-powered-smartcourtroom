@@ -213,7 +213,7 @@ export const VERDICT_LABEL = {
 }
 
 // ---------- feedback ----------
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 export async function submitFeedback({ question, answer, rating, comment, top_score, weak_match, not_found, sources = [], correct_source = null, event_type = 'answer_rating' }) {
   try {

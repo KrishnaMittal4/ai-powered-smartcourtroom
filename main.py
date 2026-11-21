@@ -1238,10 +1238,8 @@ def case_moot(case_id: str, req: CaseMootRequest, user: dict = Depends(current_u
     grounded=ask_case(user['id'],case_id,req.issue,_mode,5,True,state.get('embed_model'),state.get('reranker'),state['groq_client'],state.get('index'),state.get('records') or [])
     context='\n'.join(f"- {s.get('scope')}: {s.get('source_file')} p.{s.get('page') or '-'}: {s.get('text','')[:450]}" for s in grounded.get('sources',[]))
     dispute=f"{req.issue}\n\nCASE-SPECIFIC VERIFIED RETRIEVAL CONTEXT:\n{context}"
-    # Global moot court debate requires the corpus; skip if unavailable and return case-grounded summary only.
-    if state.get('index') is None:
-        return {'petitioner_argument': grounded.get('answer',''), 'respondent_argument': '', 'bench_questions': [], 'bench_verdict': 'Global corpus not available in this deployment. Case-grounded analysis returned above.', 'case_sources': grounded.get('sources', [])}
-    result=run_moot_court_debate(dispute,state['index'],state['records'],state['embed_model'],state['groq_client'])
+    # Case-aware moot court: runs debate with case-grounded context + legal AI
+    result=run_moot_court_debate(dispute,state.get('index'),state.get('records') or [],state.get('embed_model'),state.get('groq_client'))
     result['case_sources']=grounded.get('sources',[]); return result
 
 

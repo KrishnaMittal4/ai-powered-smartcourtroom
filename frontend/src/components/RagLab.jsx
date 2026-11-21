@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { apiFetch } from '../lib/auth.js'
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8080'
 const STARTER=[
  {id:'MAN-001',query:'What are the requirements for prosecution under Section 138 of the Negotiable Instruments Act?',relevant_files:['A_Sakthivel'],relevant_cases:[],relevance:[{judgment:'A_Sakthivel',grade:3}],category:'statutory',difficulty:'medium'},
  {id:'MAN-002',query:'When can a vague and non-speaking statutory notice be quashed?',relevant_files:['2023_10_824_841_EN'],relevant_cases:[],relevance:[{judgment:'2023_10_824_841_EN',grade:3}],category:'semantic',difficulty:'medium'}]

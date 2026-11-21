@@ -1,7 +1,7 @@
 import { apiFetch } from '../lib/auth.js'
 import { useState, useEffect } from 'react'
 
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 export default function RatioObiterModal({ isOpen, onClose, caseName, passageText }) {
   const [loading, setLoading] = useState(false)

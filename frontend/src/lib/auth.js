@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8080'
 const TOKEN_KEY = 'smart-courtroom:auth-token'
 const USER_KEY = 'smart-courtroom:auth-user'
 

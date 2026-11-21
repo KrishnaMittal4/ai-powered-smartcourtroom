@@ -2,7 +2,7 @@ import { apiFetch } from '../lib/auth.js'
 import { useEffect, useState } from 'react'
 import { parseSource } from '../lib/utils.js'
 
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 function titleOf(r) {
   // Prefer the parsed party names; fall back to a readable filename.

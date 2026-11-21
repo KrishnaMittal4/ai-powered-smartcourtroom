@@ -20,7 +20,7 @@ import PwaInstallPrompt from './components/PwaInstallPrompt.jsx'
 import { loadHistory, saveHistory, summarize, streamQuery } from './lib/utils.js'
 import { apiFetch } from './lib/auth.js'
 
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 const EXAMPLES = [
   'What must a complainant prove to succeed under Section 138 of the Negotiable Instruments Act?',

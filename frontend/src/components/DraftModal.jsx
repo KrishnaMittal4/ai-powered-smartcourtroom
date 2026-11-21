@@ -2,7 +2,7 @@ import { apiFetch } from '../lib/auth.js'
 import { useState, useEffect } from 'react'
 import { renderMarkdown } from '../lib/safeHtml.js'
 
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 const DRAFT_TYPES = [
   { id: 'legal_notice_recovery', title: 'Legal Notice for Recovery of Dues', desc: 'Breach of contract & recovery demand under Contract Act' },

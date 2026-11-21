@@ -4,7 +4,7 @@ import { renderMarkdown } from '../lib/safeHtml.js'
 import { playGavelSound, getPersonaVoiceConfig, cleanTextForSpeech } from '../lib/courtroomAudio.js'
 import { exportCertifiedCourtOrder } from '../lib/courtOrderPdf.js'
 
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 const SAMPLE_PROPOSITIONS = [
   {
@@ -60,14 +60,14 @@ const ARGUMENT_STARTERS = {
 }
 
 const LOADING_STAGES_AI = [
-  { id: 1, icon: '📚', label: 'Retrieving precedents from judgment corpus…' },
+  { id: 1, icon: '📚', label: 'Retrieving precedents and statutory authorities…' },
   { id: 2, icon: '⚖️', label: 'Petitioner Senior Counsel preparing submissions…' },
   { id: 3, icon: '🛡️', label: 'Respondent Senior Counsel preparing rebuttal…' },
   { id: 4, icon: '🏛️', label: 'Presiding Bench deliberating judicial order…' },
 ]
 
 const LOADING_STAGES_HUMAN = [
-  { id: 1, icon: '📚', label: 'Examining human oral submission against corpus…' },
+  { id: 1, icon: '📚', label: 'Examining human oral submission against authorities…' },
   { id: 2, icon: '⚔️', label: 'Opposing Senior Counsel formulating rebuttal…' },
   { id: 3, icon: '⚖️', label: 'Presiding Chief Justice assessing statutory precision…' },
   { id: 4, icon: '🏆', label: 'Bench compiling Advocacy Scorecard & Order…' },
@@ -105,7 +105,7 @@ function renderCitationList(citations, isPetitioner) {
         alignItems: 'center',
         gap: '6px',
       }}>
-        <span>Corpus Precedents Cited</span>
+        <span>Precedents Cited</span>
         <span style={{ fontSize: '10px', opacity: 0.7 }}>({citations.length})</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -544,7 +544,7 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
               <div className="moot-guide-steps">
                 <div><b>1</b><span><strong>Choose a mode</strong><small>AI vs AI for a full simulation, or Human vs AI to practise advocacy.</small></span></div>
                 <div><b>2</b><span><strong>Enter the dispute</strong><small>Paste facts or a precise question of law. You can also use a sample proposition.</small></span></div>
-                <div><b>3</b><span><strong>Run the hearing</strong><small>Review both submissions, corpus precedents, the bench decision and advocacy score.</small></span></div>
+                <div><b>3</b><span><strong>Run the hearing</strong><small>Review both submissions, statutory precedents, the bench decision and advocacy score.</small></span></div>
                 <div><b>4</b><span><strong>Continue interactively</strong><small>Ask bench questions, reply as counsel, listen to arguments or export the decree.</small></span></div>
               </div>
               <div className="moot-guide-note">AI courtroom output is a research and learning aid. Verify authorities and legal conclusions before professional use.</div>

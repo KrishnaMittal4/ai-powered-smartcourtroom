@@ -1,7 +1,7 @@
-﻿import { useState, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { apiFetch } from "../lib/auth.js"
 
-const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "http://localhost:8000"
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL || "http://localhost:8080"
 
 const QUICK_SECTIONS = [
   { label: "IPC 420 (Cheating)", query: "420" },
@@ -68,13 +68,13 @@ export default function BnsLensModal({ open, onClose }) {
         {/* Header */}
         <div className="bns-header">
           <div className="bns-title-wrap">
-            <span className="bns-badge">⚖️ 2024 Criminal Law Transition</span>
-            <h2>BNS ↔ IPC Cross-Reference Lens</h2>
+            <span className="bns-badge">?? 2024 Criminal Law Transition</span>
+            <h2>BNS ? IPC Cross-Reference Lens</h2>
             <p className="bns-subtitle">
               Instant side-by-side transition mapper between IPC/CrPC/IEA and Bharatiya Nyaya Sanhita (BNS), BNSS &amp; BSA.
             </p>
           </div>
-          <button type="button" className="btn-icon" onClick={onClose} aria-label="Close">✕</button>
+          <button type="button" className="btn-icon" onClick={onClose} aria-label="Close">?</button>
         </div>
 
         {/* Search Input */}
@@ -96,7 +96,7 @@ export default function BnsLensModal({ open, onClose }) {
             onClick={() => runDeepAnalysis()}
             disabled={analyzing || !query.trim()}
           >
-            {analyzing ? "Analyzing..." : "🔍 Deep Comparative Analysis"}
+            {analyzing ? "Analyzing..." : "?? Deep Comparative Analysis"}
           </button>
         </div>
 
@@ -118,7 +118,7 @@ export default function BnsLensModal({ open, onClose }) {
           ))}
         </div>
 
-        {error && <div className="bns-error-box">⚠️ {error}</div>}
+        {error && <div className="bns-error-box">?? {error}</div>}
 
         {/* Deep Analysis Card */}
         {deepAnalysis && (
@@ -129,7 +129,7 @@ export default function BnsLensModal({ open, onClose }) {
                 <h3>{deepAnalysis.old_provision?.act} {deepAnalysis.old_provision?.section}</h3>
                 <p>{deepAnalysis.old_provision?.title}</p>
               </div>
-              <div className="bns-compare-arrow">➔</div>
+              <div className="bns-compare-arrow">?</div>
               <div className="bns-compare-side new">
                 <span className="compare-tag new">JULY 1, 2024 LAW</span>
                 <h3>{deepAnalysis.new_provision?.act} {deepAnalysis.new_provision?.section}</h3>
@@ -140,17 +140,17 @@ export default function BnsLensModal({ open, onClose }) {
             <div className="bns-meta-row">
               <span className="bns-status-pill">{deepAnalysis.bailable_status}</span>
               <span className="bns-status-pill">{deepAnalysis.cognizable_status}</span>
-              {deepAnalysis.provider && <span className="bns-status-pill provider">✦ {deepAnalysis.provider}</span>}
+              {deepAnalysis.provider && <span className="bns-status-pill provider">? {deepAnalysis.provider}</span>}
             </div>
 
             <div className="bns-detail-block">
-              <h4>⚖️ Punishment &amp; Penalty Changes:</h4>
+              <h4>?? Punishment &amp; Penalty Changes:</h4>
               <p>{deepAnalysis.punishment_comparison}</p>
             </div>
 
             {deepAnalysis.key_substantive_changes?.length > 0 && (
               <div className="bns-detail-block">
-                <h4>✨ Key Substantive Changes in 2024:</h4>
+                <h4>? Key Substantive Changes in 2024:</h4>
                 <ul>
                   {deepAnalysis.key_substantive_changes.map((ch, idx) => (
                     <li key={idx}>{ch}</li>
@@ -160,12 +160,12 @@ export default function BnsLensModal({ open, onClose }) {
             )}
 
             <div className="bns-detail-block">
-              <h4>🚨 Procedural Impact for Advocates &amp; Police:</h4>
+              <h4>?? Procedural Impact for Advocates &amp; Police:</h4>
               <p>{deepAnalysis.procedural_impact}</p>
             </div>
 
             <div className="bns-transitional-box">
-              <strong>📅 Transitional Application:</strong> {deepAnalysis.transitional_application}
+              <strong>?? Transitional Application:</strong> {deepAnalysis.transitional_application}
             </div>
           </div>
         )}
@@ -177,14 +177,14 @@ export default function BnsLensModal({ open, onClose }) {
               <div key={idx} className="bns-card" onClick={() => runDeepAnalysis(r.old_section)}>
                 <div className="bns-card-head">
                   <span className="bns-card-sec old">{r.old_act} {r.old_section}</span>
-                  <span className="bns-card-arrow">➔</span>
+                  <span className="bns-card-arrow">?</span>
                   <span className="bns-card-sec new">{r.new_act} {r.new_section}</span>
                 </div>
                 <h4 className="bns-card-title">{r.title}</h4>
                 <p className="bns-card-changes">{r.key_changes}</p>
                 <div className="bns-card-footer">
                   <span className="bns-card-cat">{r.category}</span>
-                  <span className="bns-card-cta">View Deep Analysis ›</span>
+                  <span className="bns-card-cta">View Deep Analysis �</span>
                 </div>
               </div>
             ))}

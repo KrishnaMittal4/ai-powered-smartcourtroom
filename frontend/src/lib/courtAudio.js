@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Courtroom Audio & Voice Synthesis Utility
  * - Procedural Double Gavel Strike via Web Audio API (realistic resonant wooden acoustics)
  * - Text-to-Speech playback for Legal Advice in English & Hindi via Web Speech API
