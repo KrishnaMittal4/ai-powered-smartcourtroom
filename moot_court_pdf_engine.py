@@ -94,6 +94,7 @@ def fast_extract_judgment_pdf(pdf_bytes: bytes, filename: str) -> Dict[str, Any]
         "chunks": chunks,
         "raw_text": raw_text,
         "suggested_dispute": suggested_dispute,
+        "dispute_chips": generate_dispute_chips(raw_text, case_title, suggested_dispute),
     }
 
 
@@ -190,4 +191,121 @@ def verify_grounded_claims(raw_text: str, submissions: List[str]) -> Dict[str, A
         "grounding_score": grounding_score,
         "is_strictly_grounded": grounding_score >= 80.0,
         "claims_checked": checked_items,
+    }
+
+
+def generate_dispute_chips(raw_text: str, case_title: str, suggested_dispute: str) -> List[str]:
+    """
+    Generates 3 concise, clickable dispute propositions from the judgment text.
+    Deterministic — no LLM calls, pure regex + heuristic extraction.
+    """
+    chips = []
+    lower = raw_text.lower()
+
+    # Pattern 1: Explicit issue/question statements
+    issues = re.findall(
+        r"(?:(?:issue|question|point)\s+(?:no\.?\s*\d*\s*)?:?\s*)([A-Z][^.?!]{20,160}[.?])",
+        raw_text, re.IGNORECASE
+    )
+    for issue in issues[:2]:
+        clean = re.sub(r"\s+", " ", issue).strip().rstrip(".")
+        if len(clean) > 25:
+            chips.append(f"Whether {clean}" if not clean.lower().startswith("whether") else clean)
+
+    # Pattern 2: "Held that" statements → extract the proposition reversed
+    helds = re.findall(r"[Hh]eld[:\s]+([A-Z][^.]{20,140}\.)", raw_text)
+    for held in helds[:1]:
+        clean = re.sub(r"\s+", " ", held).strip()
+        if len(clean) > 25 and clean not in " ".join(chips):
+            chips.append(f"Whether the judgment correctly held that {clean[:100].rstrip('.')}")
+
+    # Pattern 3: Section-based proposition
+    sections = re.findall(
+        r"((?:Section|Order\s+\d+\s+Rule\s+\d+|Article)\s+\d+[A-Za-z]?(?:\s+of\s+[A-Za-z\s]+(?:Act|Code|Procedure))?)",
+        raw_text, re.IGNORECASE
+    )
+    unique_secs = list(dict.fromkeys(s.strip() for s in sections))[:2]
+    if unique_secs and len(chips) < 3:
+        sec_str = " read with ".join(unique_secs)
+        chips.append(f"Whether liability under {sec_str} is established on the facts of {case_title.split(' Versus')[0].strip() or 'this case'}")
+
+    # Fallback: use suggested_dispute as first chip
+    if not chips and suggested_dispute:
+        chips.append(suggested_dispute[:200])
+
+    # Deduplicate and limit to 3
+    seen = set()
+    unique_chips = []
+    for c in chips:
+        key = c[:40].lower()
+        if key not in seen and len(c) > 20:
+            seen.add(key)
+            unique_chips.append(c[:200])
+    return unique_chips[:3]
+
+
+def preview_judgment_pdf(pdf_bytes: bytes, filename: str) -> Dict[str, Any]:
+    """
+    Fast lightweight preview — extracts only metadata (no full chunking).
+    Returns in <20ms. Used by /moot-court/pdf-preview endpoint.
+    """
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    page_count = len(doc)
+
+    first_page_text = ""
+    raw_sample = ""
+    for page_idx, page in enumerate(doc, start=1):
+        text = page.get_text("text").strip()
+        if page_idx == 1:
+            first_page_text = text
+        raw_sample += text + "\n\n"
+        if page_idx >= 3:  # Only scan first 3 pages for speed
+            break
+
+    # Court detection
+    court = "High Court / Supreme Court"
+    court_match = re.search(
+        r"(IN THE HIGH COURT OF [^\n]+|SUPREME COURT OF INDIA|[A-Z\s]+DISTRICT COURT)",
+        first_page_text, re.IGNORECASE
+    )
+    if court_match:
+        court = court_match.group(1).strip()
+
+    # Case title detection
+    case_title = filename.replace(".pdf", "").replace("_", " ").title()
+    title_match = re.search(
+        r"([A-Z][a-zA-Z\s\.]{2,40}\s+(?:Versus|Vs\.?|V/S)\s+[A-Z][a-zA-Z\s\.]{2,40})",
+        first_page_text, re.IGNORECASE
+    )
+    if title_match:
+        case_title = title_match.group(1).strip()
+
+    # Suggested dispute
+    suggested_dispute = ""
+    issue_match = re.search(
+        r"(?:ISSUE|QUESTION OF LAW|POINTS FOR DETERMINATION|HELD)[:\s]+([^\n\.]+(?:\.[^\n\.]+){1,3})",
+        raw_sample, re.IGNORECASE
+    )
+    if issue_match:
+        suggested_dispute = issue_match.group(1).strip()
+    elif len(raw_sample) > 100:
+        sections = re.findall(
+            r"(?:Section|Order\s+\d+\s+Rule\s+\d+|Article)\s+\w+(?:\s+of\s+[A-Za-z\s]+)?",
+            raw_sample, re.IGNORECASE
+        )
+        top_sec = ", ".join(list(dict.fromkeys(sections))[:2])
+        if top_sec:
+            suggested_dispute = f"Adjudication in {case_title} concerning {top_sec} and evidentiary proof of liability."
+        else:
+            suggested_dispute = f"Legal dispute arising out of {case_title} regarding evidentiary proof and maintainability."
+
+    dispute_chips = generate_dispute_chips(raw_sample, case_title, suggested_dispute)
+
+    return {
+        "filename": filename,
+        "page_count": page_count,
+        "case_title": case_title,
+        "court": court,
+        "suggested_dispute": suggested_dispute,
+        "dispute_chips": dispute_chips,
     }

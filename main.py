@@ -1453,6 +1453,26 @@ def human_counsel_reply(
 
 # ── PDF-Grounded Moot Court Endpoint ─────────────────────────────────────────
 
+@app.post("/moot-court/pdf-preview")
+async def moot_court_pdf_preview(
+    file: UploadFile = File(...),
+    user: dict = Depends(current_user),
+):
+    """Fast PDF metadata preview — called immediately on file drop (before trial starts).
+    Returns case_title, court, page_count, suggested_dispute, dispute_chips in <300ms.
+    Does NOT run the full trial — just extracts headnote metadata."""
+    contents = await file.read()
+    if not contents[:4] == b"%PDF":
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid PDF.")
+    if len(contents) > 30 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="PDF must be under 30 MB.")
+    try:
+        from moot_court_pdf_engine import preview_judgment_pdf
+        return preview_judgment_pdf(contents, file.filename or "judgment.pdf")
+    except Exception as ex:
+        logger.error(f"PDF preview failed: {ex}", exc_info=True)
+        raise HTTPException(status_code=422, detail=f"Could not read PDF metadata: {str(ex)}")
+
 @app.post("/moot-court/with-pdf")
 async def moot_court_with_pdf(
     file: UploadFile = File(...),

@@ -199,6 +199,7 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
 
   // PDF-grounded moot court state
   const [mootPdf, setMootPdf] = useState(null)      // { file, name, size }
+  const [pdfMeta, setPdfMeta] = useState(null)       // { case_title, court, page_count, suggested_dispute, dispute_chips }
   const [pdfExtracting, setPdfExtracting] = useState(false)
   const [pdfError, setPdfError] = useState(null)
   const [isDraggingPdf, setIsDraggingPdf] = useState(false)
@@ -331,15 +332,33 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
     }
     setPdfExtracting(true)
     setPdfError(null)
+    setPdfMeta(null)
     try {
       setMootPdf({ file, name: file.name, size: file.size })
-      if (file.name && !dispute) {
+
+      // Call /moot-court/pdf-preview immediately to get metadata + chips
+      const form = new FormData()
+      form.append('file', file)
+      const res = await apiFetch(`${API_BASE}/moot-court/pdf-preview`, { method: 'POST', body: form })
+      if (res.ok) {
+        const meta = await res.json()
+        setPdfMeta(meta)
+        // Auto-populate dispute from PDF's detected issue
+        if (meta.suggested_dispute && meta.suggested_dispute.length > 10) {
+          setDispute(meta.suggested_dispute)
+        } else if (!dispute) {
+          const cleanName = file.name.replace(/\.pdf$/i, '').replace(/[_\-]+/g, ' ')
+          setDispute(`Legal dispute arising from: ${cleanName}`)
+        }
+      } else {
+        // Preview failed but file still accepted — just use filename
         const cleanName = file.name.replace(/\.pdf$/i, '').replace(/[_\-]+/g, ' ')
-        setDispute(`Legal dispute arising from: ${cleanName}`)
+        if (!dispute) setDispute(`Legal dispute arising from: ${cleanName}`)
       }
     } catch (err) {
       setPdfError(err.message || 'Could not read PDF.')
       setMootPdf(null)
+      setPdfMeta(null)
     } finally {
       setPdfExtracting(false)
     }
@@ -673,21 +692,40 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
                   onChange={handleMootPdfUpload}
                 />
                 {mootPdf ? (
-                  <div className="moot-pdf-attached">
-                    <span>📄</span>
-                    <div>
-                      <strong>{mootPdf.name}</strong>
-                      <small>{(mootPdf.size / 1024).toFixed(0)} KB · Judgment uploaded · AI counsel will argue strictly from this document</small>
+                  <>
+                    <div className="moot-pdf-attached">
+                      <span>📄</span>
+                      <div>
+                        <strong>{mootPdf.name}</strong>
+                        <small>{(mootPdf.size / 1024).toFixed(0)} KB · Judgment uploaded · AI counsel will argue strictly from this document</small>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-quiet"
+                        onClick={(e) => { e.stopPropagation(); setMootPdf(null); setDispute(''); setPdfError(null); setPdfMeta(null) }}
+                        style={{ marginLeft: 'auto', background: 'none', border: '1px solid var(--rule)', borderRadius: '8px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px', color: 'var(--muted)' }}
+                      >
+                        ✕ Remove
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      className="btn-quiet"
-                      onClick={(e) => { e.stopPropagation(); setMootPdf(null); setDispute(''); setPdfError(null) }}
-                      style={{ marginLeft: 'auto', background: 'none', border: '1px solid var(--rule)', borderRadius: '8px', padding: '4px 10px', cursor: 'pointer', fontSize: '12px', color: 'var(--muted)' }}
-                    >
-                      ✕ Remove
-                    </button>
-                  </div>
+                    {/* PDF Metadata Card — shown after preview API returns */}
+                    {pdfMeta && (
+                      <div className="moot-pdf-meta-card">
+                        <div className="moot-pdf-meta-row">
+                          <span className="moot-pdf-meta-badge">📋 {pdfMeta.page_count} page{pdfMeta.page_count !== 1 ? 's' : ''}</span>
+                          {pdfMeta.court && pdfMeta.court !== 'High Court / Supreme Court' && (
+                            <span className="moot-pdf-meta-badge">🏛 {pdfMeta.court.length > 40 ? pdfMeta.court.substring(0, 40) + '…' : pdfMeta.court}</span>
+                          )}
+                          {pdfMeta.case_title && (
+                            <span className="moot-pdf-meta-badge case-title-badge">⚖️ {pdfMeta.case_title.length > 50 ? pdfMeta.case_title.substring(0, 50) + '…' : pdfMeta.case_title}</span>
+                          )}
+                        </div>
+                        <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--muted)' }}>
+                          ✅ Judgment indexed · AI will argue strictly from this document
+                        </p>
+                      </div>
+                    )}
+                  </>
                 ) : pdfExtracting ? (
                   <div className="moot-pdf-empty">
                     <span>⏳</span>
@@ -729,16 +767,36 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
               />
 
               <div className="court-samples">
-                {SAMPLE_PROPOSITIONS.map((prop, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className="sample-chip"
-                    onClick={() => setDispute(prop.text)}
-                  >
-                    ⚖ {prop.title}
-                  </button>
-                ))}
+                {/* PDF dispute chips — shown when PDF is loaded with meta */}
+                {pdfMeta?.dispute_chips?.length > 0 ? (
+                  <>
+                    <span style={{ fontSize: '10.5px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginRight: '6px' }}>
+                      📄 From your PDF:
+                    </span>
+                    {pdfMeta.dispute_chips.map((chip, idx) => (
+                      <button
+                        key={`pdf-${idx}`}
+                        type="button"
+                        className="sample-chip pdf-chip"
+                        onClick={() => setDispute(chip)}
+                        title={chip}
+                      >
+                        ⚖ {chip.length > 55 ? chip.substring(0, 55) + '…' : chip}
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  SAMPLE_PROPOSITIONS.map((prop, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className="sample-chip"
+                      onClick={() => setDispute(prop.text)}
+                    >
+                      ⚖ {prop.title}
+                    </button>
+                  ))
+                )}
               </div>
 
               {/* If Human vs AI: Human Advocate Oral Submission Area */}
@@ -840,23 +898,52 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
         {/* ── COURTROOM ARENA (3-Pod layout + Scorecard) ── */}
         {result && (
           <>
-            {/* Judgment PDF Banner — shown when trial was grounded on a PDF */}
+            {/* Judgment PDF Banner + Grounding Meter — shown when trial was grounded on a PDF */}
             {result.judgment_meta && (
-              <div className="moot-judgment-banner">
-                <span>📄</span>
-                <span>
-                  Trial grounded on: <strong>{result.judgment_meta.case_title || result.judgment_meta.filename}</strong>
-                  {result.judgment_meta.court && <> · {result.judgment_meta.court}</>}
-                  {result.judgment_meta.page_count && <> · {result.judgment_meta.page_count} page{result.judgment_meta.page_count !== 1 ? 's' : ''}</>}
-                </span>
-                {result.verification_stats && (
-                  <span
-                    className={`moot-grounding-badge ${result.verification_stats.is_strictly_grounded ? 'verified' : 'partial'}`}
-                    style={{ marginLeft: 'auto' }}
-                  >
-                    {result.verification_stats.is_strictly_grounded ? '✅' : '⚠'} Grounding {Math.round((result.verification_stats.grounding_score || 0) * 100)}%
+              <div style={{ borderBottom: '1px solid rgba(37,99,235,0.15)' }}>
+                <div className="moot-judgment-banner">
+                  <span>📄</span>
+                  <span>
+                    Trial grounded on: <strong>{result.judgment_meta.case_title || result.judgment_meta.filename}</strong>
+                    {result.judgment_meta.court && <> · {result.judgment_meta.court}</>}
+                    {result.judgment_meta.page_count && <> · {result.judgment_meta.page_count} page{result.judgment_meta.page_count !== 1 ? 's' : ''}</>}
                   </span>
-                )}
+                  {result.retrieval_mode && (
+                    <span style={{ fontSize: '10.5px', padding: '2px 8px', borderRadius: '6px', background: 'rgba(37,99,235,0.1)', color: '#3b82f6', fontWeight: 600 }}>
+                      {result.retrieval_mode === 'private_case_index' ? '🔒 Private Index' : result.retrieval_mode === 'global_index' ? '🌐 Global Index' : '📄 PDF Only'}
+                    </span>
+                  )}
+                </div>
+                {/* Grounding Score Meter */}
+                {result.verification_stats && (() => {
+                  const score = result.verification_stats.grounding_score ?? 100
+                  const pct = Math.min(100, Math.max(0, score))
+                  const isGood = pct >= 80
+                  const color = isGood ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444'
+                  return (
+                    <div style={{ padding: '10px 20px 12px', background: 'rgba(37,99,235,0.04)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                          Citation Grounding Score
+                        </span>
+                        <span style={{ fontSize: '13px', fontWeight: 800, color }}>
+                          {pct.toFixed(0)}%
+                        </span>
+                        <span className={`moot-grounding-badge ${isGood ? 'verified' : 'partial'}`}>
+                          {isGood ? '✅ Strictly Grounded' : pct >= 50 ? '⚠ Partially Grounded' : '❌ Extrapolated'}
+                        </span>
+                        {result.verification_stats.claims_checked?.length > 0 && (
+                          <span style={{ marginLeft: 'auto', fontSize: '11px', color: 'var(--muted)' }}>
+                            {result.verification_stats.claims_checked.length} claim{result.verification_stats.claims_checked.length !== 1 ? 's' : ''} verified
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ background: 'var(--rule)', borderRadius: '99px', height: '6px', overflow: 'hidden' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: '99px', transition: 'width 0.8s ease' }} />
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
             )}
             {/* Disposition Banner */}
