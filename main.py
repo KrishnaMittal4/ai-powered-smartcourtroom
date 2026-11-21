@@ -1253,14 +1253,56 @@ class CaseMootRequest(BaseModel):
 
 @app.post('/cases/{case_id}/moot-court')
 def case_moot(case_id: str, req: CaseMootRequest, user: dict = Depends(current_user), _rl: None = Depends(rate_limited('case_moot', 'CASE_MOOT_PER_MIN', 'CASE_MOOT_PER_DAY', 3, 30, use_global=False))):
-    # In Render free-mode the global FAISS index is None; use 'case' mode only to avoid 503.
+    """Moot Court grounded on private case documents.
+    Uses the FULL global corpus pipeline (FAISS + BM25 + Hybrid RRF + CrossEncoder)
+    running on the user's private case index — isolated per user/case, same stack."""
+    from private_case_rag import get_case_index
+
+    client = state.get('groq_client')
+    if not client and not gemini_configured():
+        raise HTTPException(status_code=503, detail='Configure GEMINI_API_KEY or GROQ_API_KEY')
+
+    # 1. Load private case FAISS+BM25 index (builds it on first call, cached after)
+    try:
+        private_index, private_records = get_case_index(user['id'], case_id, state.get('embed_model'))
+    except HTTPException:
+        raise
+    except Exception as ex:
+        logger.warning(f'Private case index load failed for case {case_id}: {ex}')
+        private_index, private_records = None, []
+
+    # 2. Retrieve grounded passages using private corpus (+ global if available)
     _mode = 'both' if state.get('index') is not None else 'case'
-    grounded=ask_case(user['id'],case_id,req.issue,_mode,5,True,state.get('embed_model'),state.get('reranker'),state['groq_client'],state.get('index'),state.get('records') or [])
-    context='\n'.join(f"- {s.get('scope')}: {s.get('source_file')} p.{s.get('page') or '-'}: {s.get('text','')[:450]}" for s in grounded.get('sources',[]))
-    dispute=f"{req.issue}\n\nCASE-SPECIFIC VERIFIED RETRIEVAL CONTEXT:\n{context}"
-    # Case-aware moot court: runs debate with case-grounded context + legal AI
-    result=run_moot_court_debate(dispute,state.get('index'),state.get('records') or [],state.get('embed_model'),state.get('groq_client'))
-    result['case_sources']=grounded.get('sources',[]); return result
+    grounded = ask_case(
+        user['id'], case_id, req.issue, _mode, 5, True,
+        state.get('embed_model'), state.get('reranker'), client,
+        state.get('index'), state.get('records') or []
+    )
+    context = '\n'.join(
+        f"- {s.get('scope')}: {s.get('source_file')} p.{s.get('page') or '-'}: {s.get('text','')[:450]}"
+        for s in grounded.get('sources', [])
+    )
+    dispute = f"{req.issue}\n\nCASE-SPECIFIC VERIFIED RETRIEVAL CONTEXT:\n{context}"
+
+    # 3. Run full LangGraph moot court debate with private index as the RAG backbone.
+    #    Priority: private case index > global index > text-only (never 503)
+    active_index = private_index if private_records else state.get('index')
+    active_records = private_records if private_records else (state.get('records') or [])
+
+    result = run_moot_court_debate(
+        dispute,
+        active_index,
+        active_records,
+        state.get('embed_model'),
+        client,
+    )
+    result['case_sources'] = grounded.get('sources', [])
+    result['retrieval_mode'] = (
+        'private_case_index' if private_records
+        else 'global_index' if state.get('index')
+        else 'text_only'
+    )
+    return result
 
 
 class MootCourtRequest(BaseModel):
