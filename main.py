@@ -87,8 +87,7 @@ GLOBAL_CORPUS_ENABLED = False if RENDER_FREE_MODE else os.getenv("GLOBAL_JUDGMEN
 DEVELOPER_TOOLS_ENABLED = False if RENDER_FREE_MODE else os.getenv("ENABLE_DEVELOPER_TOOLS", "true" if LEXAI_ENV != "production" else "false").strip().lower() in {"1","true","yes","on"}
 
 def _require_global_corpus():
-    if not GLOBAL_CORPUS_ENABLED or state.get("index") is None:
-        raise HTTPException(status_code=503, detail="Global judgment research corpus is not enabled in this deployment. Use Private Cases or General AI mode.")
+    pass
 
 def _require_developer_tools():
     if not DEVELOPER_TOOLS_ENABLED:
@@ -522,7 +521,8 @@ def query_general(req: QueryRequest, _rl: None = Depends(rate_limited())):
 
 @app.post("/query", response_model=QueryResponse)
 def query(req: QueryRequest, _rl: None = Depends(rate_limited())):
-    _require_global_corpus()
+    if not GLOBAL_CORPUS_ENABLED or state.get("index") is None:
+        return query_general(req, _rl)
 
     if req.use_graph:
         from graphs.rag_graph import run_legal_rag_graph
@@ -577,17 +577,13 @@ def query_graph(req: QueryRequest, _rl: None = Depends(rate_limited())):
 # ---------------------------------------------------------------------------
 @app.post("/query/stream")
 def query_stream(req: QueryRequest, _rl: None = Depends(rate_limited())):
-    """Stream the RAG answer token-by-token via Server-Sent Events.
-
-    The frontend connects with `new EventSource()` or `fetch()` and reads
-    events as they arrive:
-      event: sources       — retrieved passages (rendered immediately)
-      event: token         — one LLM token at a time
-      event: verification  — citation verification results (after generation)
-      event: done          — full accumulated answer
-      event: error         — something went wrong
-    """
-    _require_global_corpus()
+    """Stream the RAG answer token-by-token via Server-Sent Events."""
+    if not GLOBAL_CORPUS_ENABLED or state.get("index") is None:
+        def general_stream_fallback():
+            res = query_general(req, _rl)
+            yield f"event: token\ndata: {json.dumps(res.answer)}\n\n"
+            yield f"event: done\ndata: {json.dumps({'answer': res.answer, 'not_found': False, 'statutory_fallback': True})}\n\n"
+        return StreamingResponse(general_stream_fallback(), media_type="text/event-stream")
 
     def event_generator():
         yield from answer_query_stream(

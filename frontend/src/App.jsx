@@ -717,7 +717,7 @@ export default function App({ user, onLogout }) {
               <p className="hero-subtitle">
                 {appMode === 'citizen'
                   ? 'Tell us your issue in plain English or Hinglish. We identify the applicable Indian laws, your legal rights, and give you an exact 3-step action roadmap.'
-                  : 'Ask any legal question for instant analysis, or upload a case PDF to ground every fact and argument in evidence.'}
+                  : 'Upload any judgment or case PDF for evidence-grounded RAG verification, or ask any legal question for instant statutory analysis.'}
               </p>
 
               {appMode === 'citizen' ? (
@@ -750,15 +750,15 @@ export default function App({ user, onLogout }) {
                     onClick={() => quickPdfInputRef.current?.click()}
                     disabled={quickPdfUploading}
                     className="quick-upload-card"
+                    style={{ border: '2px solid var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, var(--card-bg, #1a1a24))' }}
                   >
                     <span>📄</span>
-                    <b>{quickPdfUploading ? 'Indexing PDF…' : 'Upload & Research PDF'}</b>
-                    <small>Judgment, order or case file · ask questions with verified sources</small>
+                    <b>{quickPdfUploading ? 'Indexing Judgment…' : '＋ Insert Judgment / Case PDF'}</b>
+                    <small>Upload judgment PDF to extract facts, verify citations & run Private RAG</small>
                   </button>
-                  {globalCorpusAvailable && <button type="button" onClick={openJudgmentUpload} disabled={uploading}><span>📁</span><b>{uploading ? 'Indexing PDFs…' : 'Upload Judgments'}</b><small>Add judgments to the research corpus</small></button>}
-                  <button type="button" onClick={() => setCasesOpen(true)}><span>🗂️</span><b>My Cases</b><small>Open private case workspaces</small></button>
-                  <button type="button" onClick={() => { setMootQuery(question || ''); setMootOpen(true) }}><span>⚖️</span><b>Moot Court</b><small>Simulate arguments before an AI bench</small></button>
-                  <button type="button" onClick={() => { setDraftPrefill(null); setCitizenDraftOpen(true) }}><span>✎</span><b>Legal Drafting</b><small>Prepare a structured legal draft</small></button>
+                  <button type="button" onClick={() => setCasesOpen(true)}><span>🗂️</span><b>My Cases</b><small>Manage case files & dossiers</small></button>
+                  <button type="button" onClick={() => { setMootQuery(question || ''); setMootOpen(true) }}><span>⚖️</span><b>Moot Court</b><small>Simulate arguments before AI bench</small></button>
+                  <button type="button" onClick={() => { setDraftPrefill(null); setCitizenDraftOpen(true) }}><span>✎</span><b>Legal Drafting</b><small>Prepare formal notices & petitions</small></button>
                 </div>
               )}
 
