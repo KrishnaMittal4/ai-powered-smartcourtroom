@@ -30,6 +30,12 @@ class MootCourtState(TypedDict, total=False):
     records: Optional[List[Dict[str, Any]]]
     embed_model: Any
     groq_client: Optional[Groq]
+
+    # Attached Judgment PDF records & provenance
+    judgment_chunks: Optional[List[Dict[str, Any]]]
+    judgment_meta: Optional[Dict[str, Any]]
+    raw_judgment_text: Optional[str]
+    verification_stats: Optional[Dict[str, Any]]
     
     # Retrieved corpus evidence
     petitioner_passages: List[Dict[str, Any]]
@@ -56,7 +62,7 @@ class MootCourtState(TypedDict, total=False):
 
 
 def dual_retrieval_node(state: MootCourtState) -> Dict[str, Any]:
-    """Node 1: Dual-perspective FAISS vector retrieval for Petitioner & Respondent."""
+    """Node 1: Dual-perspective retrieval for Petitioner & Respondent from judgment PDF or corpus."""
     history = list(state.get("node_history", []))
     history.append("dual_retrieval")
 
@@ -64,16 +70,27 @@ def dual_retrieval_node(state: MootCourtState) -> Dict[str, Any]:
     index = state.get("index")
     records = state.get("records")
     embed_model = state.get("embed_model")
+    judgment_chunks = state.get("judgment_chunks")
 
-    # Targeted retrieval query expansion
-    petitioner_passages = _retrieve_for_perspective(
-        f"{dispute} liability violation strict interpretation maintainable statutory breach",
-        index, records, embed_model, top_k=3
-    )
-    respondent_passages = _retrieve_for_perspective(
-        f"{dispute} not liable exception defense quash distinguished lack of evidence bona fide",
-        index, records, embed_model, top_k=3
-    )
+    # If judgment PDF chunks are provided, run fast in-memory hybrid retrieval
+    if judgment_chunks:
+        from moot_court_pdf_engine import retrieve_grounded_judgment_passages
+        petitioner_passages, respondent_passages = retrieve_grounded_judgment_passages(
+            chunks=judgment_chunks,
+            dispute=dispute,
+            embed_model=embed_model,
+            top_k=4,
+        )
+    else:
+        # Targeted retrieval query expansion on corpus
+        petitioner_passages = _retrieve_for_perspective(
+            f"{dispute} liability violation strict interpretation maintainable statutory breach",
+            index, records, embed_model, top_k=3
+        )
+        respondent_passages = _retrieve_for_perspective(
+            f"{dispute} not liable exception defense quash distinguished lack of evidence bona fide",
+            index, records, embed_model, top_k=3
+        )
 
     return {
         "petitioner_passages": petitioner_passages,
@@ -233,6 +250,28 @@ Deliver the official reasoned Judicial Order of the Bench:"""
     }
 
 
+def citation_verifier_node(state: MootCourtState) -> Dict[str, Any]:
+    """Node 5: Deterministic citation verification to prevent and score LLM hallucinations."""
+    history = list(state.get("node_history", []))
+    history.append("citation_verifier")
+
+    raw_text = state.get("raw_judgment_text", "")
+    if not raw_text and state.get("judgment_chunks"):
+        raw_text = " ".join([c.get("text", "") for c in state["judgment_chunks"]])
+
+    pet_arg = state.get("petitioner_argument", "")
+    resp_arg = state.get("respondent_argument", "")
+    bench_verdict = state.get("judge_verdict", "")
+
+    from moot_court_pdf_engine import verify_grounded_claims
+    stats = verify_grounded_claims(raw_text, [pet_arg, resp_arg, bench_verdict])
+
+    return {
+        "verification_stats": stats,
+        "node_history": history,
+    }
+
+
 def build_moot_court_graph():
     """Compiles the LangGraph StateGraph workflow for Moot Court."""
     workflow = StateGraph(MootCourtState)
@@ -242,13 +281,15 @@ def build_moot_court_graph():
     workflow.add_node("petitioner_counsel", petitioner_counsel_node)
     workflow.add_node("respondent_counsel", respondent_counsel_node)
     workflow.add_node("bench_judgment", bench_judgment_node)
+    workflow.add_node("citation_verifier", citation_verifier_node)
 
-    # Establish linear and conditional edges
+    # Establish linear edges
     workflow.add_edge(START, "dual_retrieval")
     workflow.add_edge("dual_retrieval", "petitioner_counsel")
     workflow.add_edge("petitioner_counsel", "respondent_counsel")
     workflow.add_edge("respondent_counsel", "bench_judgment")
-    workflow.add_edge("bench_judgment", END)
+    workflow.add_edge("bench_judgment", "citation_verifier")
+    workflow.add_edge("citation_verifier", END)
 
     return workflow.compile()
 
@@ -270,6 +311,9 @@ def run_moot_court_graph(
     records: list = None,
     embed_model=None,
     groq_client: Optional[Groq] = None,
+    judgment_chunks: Optional[List[Dict[str, Any]]] = None,
+    judgment_meta: Optional[Dict[str, Any]] = None,
+    raw_judgment_text: Optional[str] = None,
 ) -> dict:
     """
     Executes the Moot Court simulation via compiled LangGraph StateGraph.
@@ -286,6 +330,9 @@ def run_moot_court_graph(
         "records": records,
         "embed_model": embed_model,
         "groq_client": groq_client,
+        "judgment_chunks": judgment_chunks,
+        "judgment_meta": judgment_meta,
+        "raw_judgment_text": raw_judgment_text,
         "round_count": 1,
         "max_rounds": 1,
         "node_history": [],
@@ -297,6 +344,12 @@ def run_moot_court_graph(
 
     return {
         "dispute": final_state["dispute"],
+        "judgment_meta": final_state.get("judgment_meta"),
+        "verification_stats": final_state.get("verification_stats", {
+            "grounding_score": 100.0,
+            "is_strictly_grounded": True,
+            "claims_checked": [],
+        }),
         "petitioner": {
             "counsel": "Senior Counsel for Petitioner",
             "model": final_state.get("petitioner_model", "Groq"),

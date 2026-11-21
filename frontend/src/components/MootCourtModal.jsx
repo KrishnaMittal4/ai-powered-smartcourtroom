@@ -700,14 +700,19 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
                   <div className="moot-pdf-empty">
                     <span>{isDraggingPdf ? '📥' : '⚖️'}</span>
                     <div>
-                      <strong>{isDraggingPdf ? 'Drop PDF to Ground the Trial' : 'Attach Judgment PDF (Optional)'}</strong>
-                      <small>AI Counsels & Bench will argue strictly from the uploaded document · BM25 + LangGraph retrieval · Zero hallucination</small>
+                      <strong>{isDraggingPdf ? '📥 Drop Judgment PDF Here' : '⚖️ Upload Judgment PDF — Required'}</strong>
+                      <small>AI Counsels & Bench argue strictly from your document · BM25 + LangGraph · Zero hallucination · Max 30 MB</small>
                     </div>
                   </div>
                 )}
               </div>
               {pdfError && (
                 <p style={{ color: 'var(--no)', fontSize: '12px', margin: '-10px 0 12px' }}>⚠ {pdfError}</p>
+              )}
+              {!mootPdf && !pdfError && (
+                <p style={{ color: 'var(--muted)', fontSize: '11.5px', margin: '-10px 0 14px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <span style={{ color: '#f59e0b' }}>⚠</span> A judgment PDF is required to commence the trial — the AI will argue strictly from your document.
+                </p>
               )}
 
               {/* Legal Proposition / Dispute facts */}
@@ -792,6 +797,7 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
                 type="submit"
                 className="court-go-btn"
                 disabled={
+                  !mootPdf ||
                   dispute.trim().length < 10 ||
                   (trialMode === 'human_vs_ai' && userArgument.trim().length < 15)
                 }

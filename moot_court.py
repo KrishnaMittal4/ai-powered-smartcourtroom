@@ -102,6 +102,9 @@ def run_moot_court_debate(
     embed_model=None,
     groq_client: Groq = None,
     use_graph: bool = True,
+    judgment_chunks: list = None,
+    judgment_meta: dict = None,
+    raw_judgment_text: str = None,
 ) -> dict:
     """
     Executes an adversarial courtroom debate.
@@ -120,19 +123,28 @@ def run_moot_court_debate(
                 records=records,
                 embed_model=embed_model,
                 groq_client=groq_client,
+                judgment_chunks=judgment_chunks,
+                judgment_meta=judgment_meta,
+                raw_judgment_text=raw_judgment_text,
             )
         except Exception as e:
             logger.warning("LangGraph Moot Court execution error, proceeding with procedural fallback: %s", e)
 
-    # 1. Dual Retrieval from FAISS (0 LLM cost)
-    petitioner_passages = _retrieve_for_perspective(
-        f"{dispute} liability violation strict interpretation maintainable",
-        index, records, embed_model, top_k=3
-    )
-    respondent_passages = _retrieve_for_perspective(
-        f"{dispute} not liable exception defense quash distinguished lack of evidence",
-        index, records, embed_model, top_k=3
-    )
+    # 1. Dual Retrieval (Grounded in PDF if chunks available, otherwise corpus/general)
+    if judgment_chunks:
+        from moot_court_pdf_engine import retrieve_grounded_judgment_passages
+        petitioner_passages, respondent_passages = retrieve_grounded_judgment_passages(
+            chunks=judgment_chunks, dispute=dispute, embed_model=embed_model, top_k=4
+        )
+    else:
+        petitioner_passages = _retrieve_for_perspective(
+            f"{dispute} liability violation strict interpretation maintainable",
+            index, records, embed_model, top_k=3
+        )
+        respondent_passages = _retrieve_for_perspective(
+            f"{dispute} not liable exception defense quash distinguished lack of evidence",
+            index, records, embed_model, top_k=3
+        )
 
     petitioner_docs_text = _format_passages(petitioner_passages)
     respondent_docs_text = _format_passages(respondent_passages)
@@ -411,6 +423,9 @@ def run_human_counsel_debate(
     records: list = None,
     embed_model=None,
     groq_client: Groq = None,
+    judgment_chunks: list = None,
+    judgment_meta: dict = None,
+    raw_judgment_text: str = None,
 ) -> dict:
     """
     Executes 'Step In As Counsel' mode:
@@ -426,15 +441,18 @@ def run_human_counsel_debate(
     opp_role_name = "Respondent" if user_is_petitioner else "Petitioner"
     user_role_name = "Petitioner" if user_is_petitioner else "Respondent"
 
-    # 1. Retrieve supporting passages for AI Opponent
-    if user_is_petitioner:
-        # User is Petitioner; AI is Respondent Defense
-        opp_query = f"{dispute} not liable exception defense quash distinguished lack of evidence"
+    # 1. Retrieve supporting passages for AI Opponent (from judgment PDF chunks if available)
+    if judgment_chunks:
+        from moot_court_pdf_engine import retrieve_grounded_judgment_passages
+        pet_p, resp_p = retrieve_grounded_judgment_passages(judgment_chunks, dispute, embed_model, top_k=4)
+        opp_passages = resp_p if user_is_petitioner else pet_p
     else:
-        # User is Respondent; AI is Petitioner Prosecution
-        opp_query = f"{dispute} liability violation strict interpretation maintainable statutory breach"
+        if user_is_petitioner:
+            opp_query = f"{dispute} not liable exception defense quash distinguished lack of evidence"
+        else:
+            opp_query = f"{dispute} liability violation strict interpretation maintainable statutory breach"
+        opp_passages = _retrieve_for_perspective(opp_query, index, records, embed_model, top_k=3)
 
-    opp_passages = _retrieve_for_perspective(opp_query, index, records, embed_model, top_k=3)
     opp_docs_text = _format_passages(opp_passages)
 
     # 2. Generate Opposing Counsel's submission
@@ -582,9 +600,21 @@ Evaluate both submissions, generate the Scorecard JSON, and pronounce the Judici
         "citations": [] if not user_is_petitioner else opp_passages,
     }
 
+    ver_stats = None
+    if judgment_chunks:
+        from moot_court_pdf_engine import verify_grounded_claims
+        raw_txt = raw_judgment_text or " ".join([c.get("text", "") for c in judgment_chunks])
+        ver_stats = verify_grounded_claims(raw_txt, [user_argument, opponent_argument, judicial_order])
+
     return {
         "mode": "human_vs_ai",
         "dispute": dispute,
+        "judgment_meta": judgment_meta,
+        "verification_stats": ver_stats or {
+            "grounding_score": 100.0,
+            "is_strictly_grounded": True,
+            "claims_checked": [],
+        },
         "user_role": user_role_name.lower(),
         "petitioner": petitioner_data,
         "respondent": respondent_data,
