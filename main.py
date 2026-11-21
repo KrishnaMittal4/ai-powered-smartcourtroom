@@ -281,6 +281,26 @@ async def case_documents_upload(case_id: str, files: list[UploadFile] = File(...
     return {"documents": await save_documents(user["id"], case_id, files, MAX_UPLOAD_MB)}
 
 
+@app.post("/cases/load-sample")
+async def case_load_sample(user: dict = Depends(current_user)):
+    """Loads a pre-packaged sample NI Act §138 Cheque Bounce judgment PDF into a new private case workspace."""
+    import io
+    sample_path = os.path.join(os.path.dirname(__file__), "judgments", "case1_cheque_bounce.pdf")
+    if not os.path.exists(sample_path):
+        raise HTTPException(404, "Sample judgment PDF not found on server.")
+    with open(sample_path, "rb") as f:
+        pdf_bytes = f.read()
+    case = create_case(user["id"], "Sample Matter: NI Act §138 Dishonour", "Demonstration case featuring Section 138 Negotiable Instruments Act cheque dishonour.")
+    upload_file = UploadFile(filename="case1_cheque_bounce.pdf", file=io.BytesIO(pdf_bytes))
+    docs = await save_documents(user["id"], case["id"], [upload_file], MAX_UPLOAD_MB)
+    try:
+        from private_case_rag import build_case_index
+        build_case_index(user["id"], case["id"], state.get("embed_model"))
+    except Exception as e:
+        logger.warning(f"Error indexing sample case: {e}")
+    return {"status": "ok", "case": case, "documents": docs}
+
+
 
 @app.get("/cases/{case_id}/documents/{document_id}/file")
 def case_document_file(case_id: str, document_id: str, user: dict = Depends(current_user)):

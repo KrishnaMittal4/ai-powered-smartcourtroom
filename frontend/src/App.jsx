@@ -94,6 +94,7 @@ export default function App({ user, onLogout }) {
   const [casesOpen, setCasesOpen] = useState(false)
   const [mootQuery, setMootQuery] = useState('')
   const [quickPdfUploading, setQuickPdfUploading] = useState(false)
+  const [isDraggingPdf, setIsDraggingPdf] = useState(false)
   const [initialCaseTab, setInitialCaseTab] = useState('overview')
   const [initialCaseMode, setInitialCaseMode] = useState(null)
   const inputRef = useRef(null)
@@ -213,6 +214,32 @@ export default function App({ user, onLogout }) {
     } finally {
       setQuickPdfUploading(false)
       if (e.target) e.target.value = ''
+    }
+  }
+
+  async function handleLoadSampleCase() {
+    setQuickPdfUploading(true)
+    setError(null)
+    setAnnounce('Loading sample NI Act §138 Cheque Dishonour matter…')
+    try {
+      const res = await apiFetch(`${API_BASE}/cases/load-sample`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.detail || 'Could not load sample case.')
+      await refreshCases()
+      setInitialCaseTab('overview')
+      setInitialCaseMode('case')
+      setActiveCaseId(data.case.id)
+      setCasesOpen(false)
+      setUploadStatus({
+        type: 'success',
+        msg: 'Sample NI Act §138 case loaded! Running automatic Case Intelligence analysis…'
+      })
+      setAnnounce('Sample case loaded. Analysis started.')
+    } catch (err) {
+      setError(err.message || 'Could not load sample case.')
+      setAnnounce('Sample case loading failed.')
+    } finally {
+      setQuickPdfUploading(false)
     }
   }
 
@@ -737,29 +764,64 @@ export default function App({ user, onLogout }) {
               )}
 
               {appMode === 'research' && (
-                <div className="advocate-tool-strip" aria-label="Advocate tools">
-                  <input
-                    ref={quickPdfInputRef}
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    style={{ display: 'none' }}
-                    onChange={handleQuickPdfUpload}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => quickPdfInputRef.current?.click()}
-                    disabled={quickPdfUploading}
-                    className="quick-upload-card"
-                    style={{ border: '2px solid var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, var(--card-bg, #1a1a24))' }}
-                  >
-                    <span>📄</span>
-                    <b>{quickPdfUploading ? 'Indexing Judgment…' : '＋ Insert Judgment / Case PDF'}</b>
-                    <small>Upload judgment PDF to extract facts, verify citations & run Private RAG</small>
-                  </button>
-                  <button type="button" onClick={() => setCasesOpen(true)}><span>🗂️</span><b>My Cases</b><small>Manage case files & dossiers</small></button>
-                  <button type="button" onClick={() => { setMootQuery(question || ''); setMootOpen(true) }}><span>⚖️</span><b>Moot Court</b><small>Simulate arguments before AI bench</small></button>
-                  <button type="button" onClick={() => { setDraftPrefill(null); setCitizenDraftOpen(true) }}><span>✎</span><b>Legal Drafting</b><small>Prepare formal notices & petitions</small></button>
-                </div>
+                <>
+                  <div className="advocate-tool-strip" aria-label="Advocate tools">
+                    <input
+                      ref={quickPdfInputRef}
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      style={{ display: 'none' }}
+                      onChange={handleQuickPdfUpload}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => quickPdfInputRef.current?.click()}
+                      disabled={quickPdfUploading}
+                      className={`quick-upload-card ${quickPdfUploading ? 'uploading' : ''} ${isDraggingPdf ? 'dragging' : ''}`}
+                      onDragOver={(e) => { e.preventDefault(); setIsDraggingPdf(true) }}
+                      onDragLeave={() => setIsDraggingPdf(false)}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        setIsDraggingPdf(false)
+                        const f = e.dataTransfer?.files?.[0]
+                        if (f) handleQuickPdfUpload({ target: { files: [f] } })
+                      }}
+                      title="Click or drag-and-drop a PDF judgment to analyze"
+                    >
+                      <span className="tool-badge">PRIMARY</span>
+                      <div className="tool-icon-wrap">{quickPdfUploading ? '⏳' : isDraggingPdf ? '📥' : '📄'}</div>
+                      <b>{quickPdfUploading ? 'Indexing Judgment…' : isDraggingPdf ? 'Drop PDF Here' : '＋ Insert Judgment / Case PDF'}</b>
+                      <small>Upload judgment PDF to extract facts, verify citations & run Private RAG</small>
+                    </button>
+                    <button type="button" onClick={() => setCasesOpen(true)}>
+                      <div className="tool-icon-wrap">🗂️</div>
+                      <b>My Cases</b>
+                      <small>Manage private case files & dossiers</small>
+                    </button>
+                    <button type="button" onClick={() => { setMootQuery(question || ''); setMootOpen(true) }}>
+                      <div className="tool-icon-wrap">⚖️</div>
+                      <b>Moot Court</b>
+                      <small>Simulate arguments before AI bench</small>
+                    </button>
+                    <button type="button" onClick={() => { setDraftPrefill(null); setCitizenDraftOpen(true) }}>
+                      <div className="tool-icon-wrap">✎</div>
+                      <b>Legal Drafting</b>
+                      <small>Prepare formal notices & petitions</small>
+                    </button>
+                  </div>
+
+                  <div className="sample-case-row">
+                    <button
+                      type="button"
+                      className="sample-case-chip"
+                      onClick={handleLoadSampleCase}
+                      disabled={quickPdfUploading}
+                      title="Load a sample Section 138 NI Act Cheque Bounce case to test all features instantly"
+                    >
+                      ⚡ Quick Demo: Load Sample NI Act §138 Cheque Bounce Case
+                    </button>
+                  </div>
+                </>
               )}
 
 
