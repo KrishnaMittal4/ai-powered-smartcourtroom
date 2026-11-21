@@ -364,3 +364,116 @@ def brief(user_id,case_id):
         raise HTTPException(409,'Analyze or update the case first. Case Brief is rendered from saved intelligence without another AI call.')
     x=c['intelligence']
     return {'case_summary':x.get('summary',''),'parties':x.get('parties',[]),'material_facts':x.get('important_facts',[]),'legal_issues':x.get('legal_issues',[]),'timeline':x.get('timeline',[]),'statutes':x.get('statutes',[]),'key_evidence':x.get('evidence',[]),'contradictions':x.get('contradictions',[]),'unresolved_questions':x.get('unresolved_questions',[]),'generated_from_cache':True}
+
+
+
+# ─── Specialized Feature Endpoints Caching ───────────────────────────────────
+
+def get_or_build_evidence_graph(user_id: int, case_id: str, client=None):
+    """Retrieves or builds the Legal Evidence & Claim Graph for a case workspace."""
+    assert_case(user_id, case_id)
+    fp = _fingerprint(user_id, case_id)
+    cache_key = f"evidence_graph_{fp}"
+    
+    # Check cache in DB if available
+    if not sb.enabled():
+        with sqlite3.connect(DB_PATH) as db:
+            db.execute("""CREATE TABLE IF NOT EXISTS case_feature_cache(
+                case_id TEXT NOT NULL, user_id INTEGER NOT NULL, feature_key TEXT NOT NULL,
+                payload TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(case_id, user_id, feature_key))""")
+            row = db.execute("SELECT payload FROM case_feature_cache WHERE case_id=? AND user_id=? AND feature_key=?", (case_id, user_id, cache_key)).fetchone()
+            if row:
+                try:
+                    return json.loads(row[0])
+                except Exception:
+                    pass
+
+    from private_case_rag import _page_records
+    records = _page_records(user_id, case_id)
+    if not records:
+        return {"nodes": [], "edges": [], "summary": {"total_nodes": 0, "total_edges": 0, "message": "Upload case documents first."}}
+
+    from legal_evidence_graph import extract_evidence_graph_with_llm
+    graph = extract_evidence_graph_with_llm(records, client)
+
+    # Cache result
+    now = int(time.time())
+    if not sb.enabled():
+        with sqlite3.connect(DB_PATH) as db:
+            db.execute("INSERT OR REPLACE INTO case_feature_cache VALUES (?, ?, ?, ?, ?)",
+                       (case_id, user_id, cache_key, json.dumps(graph, ensure_ascii=False), now))
+            db.commit()
+
+    return graph
+
+
+def get_or_build_timeline(user_id: int, case_id: str, client=None):
+    """Retrieves or builds the Automatic Case Timeline with Date Conflict detection."""
+    assert_case(user_id, case_id)
+    fp = _fingerprint(user_id, case_id)
+    cache_key = f"timeline_{fp}"
+
+    if not sb.enabled():
+        with sqlite3.connect(DB_PATH) as db:
+            db.execute("""CREATE TABLE IF NOT EXISTS case_feature_cache(
+                case_id TEXT NOT NULL, user_id INTEGER NOT NULL, feature_key TEXT NOT NULL,
+                payload TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(case_id, user_id, feature_key))""")
+            row = db.execute("SELECT payload FROM case_feature_cache WHERE case_id=? AND user_id=? AND feature_key=?", (case_id, user_id, cache_key)).fetchone()
+            if row:
+                try:
+                    return json.loads(row[0])
+                except Exception:
+                    pass
+
+    from private_case_rag import _page_records
+    records = _page_records(user_id, case_id)
+    if not records:
+        return {"events": [], "conflict_count": 0, "message": "Upload case documents first."}
+
+    from case_timeline import extract_timeline_with_llm
+    timeline = extract_timeline_with_llm(records, client)
+
+    now = int(time.time())
+    if not sb.enabled():
+        with sqlite3.connect(DB_PATH) as db:
+            db.execute("INSERT OR REPLACE INTO case_feature_cache VALUES (?, ?, ?, ?, ?)",
+                       (case_id, user_id, cache_key, json.dumps(timeline, ensure_ascii=False), now))
+            db.commit()
+
+    return timeline
+
+
+def get_or_build_contradictions(user_id: int, case_id: str, client=None):
+    """Retrieves or builds Cross-Document Contradiction records for a case workspace."""
+    assert_case(user_id, case_id)
+    fp = _fingerprint(user_id, case_id)
+    cache_key = f"contradictions_{fp}"
+
+    if not sb.enabled():
+        with sqlite3.connect(DB_PATH) as db:
+            db.execute("""CREATE TABLE IF NOT EXISTS case_feature_cache(
+                case_id TEXT NOT NULL, user_id INTEGER NOT NULL, feature_key TEXT NOT NULL,
+                payload TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(case_id, user_id, feature_key))""")
+            row = db.execute("SELECT payload FROM case_feature_cache WHERE case_id=? AND user_id=? AND feature_key=?", (case_id, user_id, cache_key)).fetchone()
+            if row:
+                try:
+                    return json.loads(row[0])
+                except Exception:
+                    pass
+
+    from private_case_rag import _page_records
+    records = _page_records(user_id, case_id)
+    if not records:
+        return {"contradictions": [], "summary": {"total": 0, "confirmed": 0, "possible": 0, "message": "Upload case documents first."}}
+
+    from cross_document_contradictions import detect_cross_document_contradictions
+    contradictions = detect_cross_document_contradictions(records, client)
+
+    now = int(time.time())
+    if not sb.enabled():
+        with sqlite3.connect(DB_PATH) as db:
+            db.execute("INSERT OR REPLACE INTO case_feature_cache VALUES (?, ?, ?, ?, ?)",
+                       (case_id, user_id, cache_key, json.dumps(contradictions, ensure_ascii=False), now))
+            db.commit()
+
+    return contradictions

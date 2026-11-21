@@ -360,6 +360,24 @@ def case_issue_map_get(case_id: str, user: dict = Depends(current_user)):
 async def case_issue_map_build(case_id: str, user: dict = Depends(current_user), _rl: None = Depends(rate_limited("case_issue_map", "CASE_ISSUE_MAP_PER_MIN", "CASE_ISSUE_MAP_PER_DAY", 2, 20, use_global=False))):
     return await run_in_threadpool(build_issue_map, user["id"], case_id, state["groq_client"], state.get("embed_model"), state.get("reranker"), state.get("index"), state.get("records", []))
 
+# ── Feature 1: Legal Evidence & Claim Graph ──────────────────────────────────
+@app.get("/cases/{case_id}/evidence-graph")
+def case_evidence_graph_get(case_id: str, user: dict = Depends(current_user)):
+    from case_engine import get_or_build_evidence_graph
+    return get_or_build_evidence_graph(user["id"], case_id, client=state.get("groq_client"))
+
+# ── Feature 4: Automatic Case Timeline ───────────────────────────────────────
+@app.get("/cases/{case_id}/timeline")
+def case_timeline_get(case_id: str, user: dict = Depends(current_user)):
+    from case_engine import get_or_build_timeline
+    return get_or_build_timeline(user["id"], case_id, client=state.get("groq_client"))
+
+# ── Feature 5: Cross-Document Contradiction Detector ─────────────────────────
+@app.get("/cases/{case_id}/contradictions")
+def case_contradictions_get(case_id: str, user: dict = Depends(current_user)):
+    from case_engine import get_or_build_contradictions
+    return get_or_build_contradictions(user["id"], case_id, client=state.get("groq_client"))
+
 class QueryRequest(BaseModel):
     question: str = Field(..., min_length=3, max_length=1000, description="The legal question to ask")
     top_k: int = Field(3, ge=1, le=10, description="Number of passages to retrieve")
@@ -386,6 +404,8 @@ class QueryResponse(BaseModel):
     weak_match: bool = False     # answered, but best score was below WEAK_RETRIEVAL_SCORE
     rewritten_query: str | None = None  # the LLM-rewritten search query (if different from original)
     graph_execution: dict | None = None  # LangGraph node trace and metadata if graph mode was used
+    confidence_details: dict | None = None  # Calibrated Adaptive Confidence signals
+    telemetry: dict | None = None           # Safe pipeline telemetry for RAG Explainability UI
 
 
 @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
@@ -1451,6 +1471,88 @@ def human_counsel_reply(
         raise HTTPException(status_code=500, detail=f"Debate reply failed: {str(e)}")
 
 
+# ── Feature 3: Interactive Moot Court Upgrades (Scorecard, Objections, Human Judge) ───
+
+class MootScorecardRequest(BaseModel):
+    dispute: str = Field(..., min_length=10)
+    human_argument: str = Field(..., min_length=10)
+    opponent_argument: str = Field(default="")
+    judicial_order: str = Field(default="")
+    user_role: str = Field("petitioner")
+
+
+@app.post("/moot-court/scorecard")
+def moot_court_scorecard(
+    req: MootScorecardRequest,
+    _rl: None = Depends(rate_limited("moot_sc", "MOOT_SC_PER_MIN", "MOOT_SC_PER_DAY", 10, 100, use_global=False)),
+):
+    """Generates the official 8-Category Moot Performance Scorecard with evidence-based justifications."""
+    client = state.get("groq_client")
+    if not client and not gemini_configured():
+        raise HTTPException(status_code=503, detail="Configure GEMINI_API_KEY or GROQ_API_KEY")
+    from moot_court import generate_eight_category_scorecard
+    return generate_eight_category_scorecard(
+        dispute=req.dispute,
+        human_argument=req.human_argument,
+        opponent_argument=req.opponent_argument,
+        judicial_order=req.judicial_order,
+        user_role=req.user_role,
+        groq_client=client,
+    )
+
+
+class MootObjectionRequest(BaseModel):
+    dispute: str = Field(..., min_length=5)
+    objecting_party: str = Field("Human Advocate")
+    ground: str = Field(..., min_length=2)
+    target_statement: str = Field(..., min_length=2)
+
+
+@app.post("/moot-court/objection")
+def moot_court_objection(
+    req: MootObjectionRequest,
+    _rl: None = Depends(rate_limited("moot_obj", "MOOT_OBJ_PER_MIN", "MOOT_OBJ_PER_DAY", 15, 150, use_global=False)),
+):
+    """Handles an in-courtroom objection with immediate Bench ruling (Sustained/Overruled)."""
+    client = state.get("groq_client")
+    if not client and not gemini_configured():
+        raise HTTPException(status_code=503, detail="Configure GEMINI_API_KEY or GROQ_API_KEY")
+    from moot_court import handle_courtroom_objection
+    return handle_courtroom_objection(
+        dispute=req.dispute,
+        objecting_party=req.objecting_party,
+        ground=req.ground,
+        target_statement=req.target_statement,
+        groq_client=client,
+    )
+
+
+class MootJudgeTurnRequest(BaseModel):
+    dispute: str = Field(..., min_length=10)
+    petitioner_argument: str = Field(default="")
+    respondent_argument: str = Field(default="")
+    judge_action: str = Field(..., min_length=5)
+
+
+@app.post("/moot-court/judge-turn")
+def moot_court_judge_turn(
+    req: MootJudgeTurnRequest,
+    _rl: None = Depends(rate_limited("moot_jt", "MOOT_JT_PER_MIN", "MOOT_JT_PER_DAY", 10, 100, use_global=False)),
+):
+    """Handles Human Judge Mode where the user acts as Presiding Judge."""
+    client = state.get("groq_client")
+    if not client and not gemini_configured():
+        raise HTTPException(status_code=503, detail="Configure GEMINI_API_KEY or GROQ_API_KEY")
+    from moot_court import run_human_judge_session
+    return run_human_judge_session(
+        dispute=req.dispute,
+        petitioner_argument=req.petitioner_argument,
+        respondent_argument=req.respondent_argument,
+        judge_action=req.judge_action,
+        groq_client=client,
+    )
+
+
 # ── PDF-Grounded Moot Court Endpoint ─────────────────────────────────────────
 
 @app.post("/moot-court/pdf-preview")
@@ -1528,15 +1630,17 @@ async def moot_court_with_pdf(
     )
 
     try:
-        if trial_mode == "human_vs_ai":
+        is_human_advocate = trial_mode in {"human_vs_ai", "human_vs_ai_petitioner", "human_vs_ai_respondent", "practice_mode"}
+        if is_human_advocate:
+            actual_role = "respondent" if trial_mode == "human_vs_ai_respondent" else user_role
             if not user_argument or len(user_argument.strip()) < 15:
                 raise HTTPException(
                     status_code=400,
-                    detail="Human argument must be at least 15 characters for Human vs AI mode.",
+                    detail="Human argument must be at least 15 characters for Counsel Mode.",
                 )
-            return run_human_counsel_debate(
+            res = run_human_counsel_debate(
                 dispute=effective_dispute,
-                user_role=user_role,
+                user_role=actual_role,
                 user_argument=user_argument.strip(),
                 index=state.get("index"),
                 records=state.get("records") or [],
@@ -1546,8 +1650,23 @@ async def moot_court_with_pdf(
                 judgment_meta=judgment_meta,
                 raw_judgment_text=pdf_data.get("raw_text"),
             )
+            # Generate 8-category scorecard if human argued
+            from moot_court import generate_eight_category_scorecard
+            sc8 = generate_eight_category_scorecard(
+                dispute=effective_dispute,
+                human_argument=user_argument.strip(),
+                opponent_argument=res.get("respondent", {}).get("argument", "") if actual_role == "petitioner" else res.get("petitioner", {}).get("argument", ""),
+                judicial_order=res.get("bench", {}).get("verdict", ""),
+                user_role=actual_role,
+                groq_client=client,
+            )
+            if "scorecard" in res and isinstance(res["scorecard"], dict):
+                res["scorecard"]["eight_categories"] = sc8.get("categories")
+                res["scorecard"]["overall_score"] = sc8.get("overall_score")
+                res["scorecard"]["executive_critique"] = sc8.get("executive_critique")
+            return res
         else:
-            return run_moot_court_debate(
+            res = run_moot_court_debate(
                 dispute=effective_dispute,
                 index=state.get("index"),
                 records=state.get("records") or [],
@@ -1557,6 +1676,9 @@ async def moot_court_with_pdf(
                 judgment_meta=judgment_meta,
                 raw_judgment_text=pdf_data.get("raw_text"),
             )
+            if trial_mode == "human_judge":
+                res["mode"] = "human_judge"
+            return res
     except HTTPException:
         raise
     except Exception as e:

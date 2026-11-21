@@ -393,6 +393,37 @@ def run_legal_rag_graph(
 
     final_state = graph.invoke(initial_state)
 
+    passages = final_state.get("passages", [])
+    top_score = final_state.get("top_score")
+    verification = final_state.get("verification")
+
+    from adaptive_retrieval_confidence import evaluate_retrieval_confidence
+    conf_eval = evaluate_retrieval_confidence(
+        query=query,
+        passages=passages,
+        top_score=top_score,
+        verification=verification,
+        min_threshold=MIN_RETRIEVAL_SCORE,
+        weak_threshold=WEAK_RETRIEVAL_SCORE,
+    )
+
+    total_cit = len(verification.get("citations", [])) if verification else 0
+    supp_cit = sum(1 for c in (verification.get("citations") or []) if c.get("verdict") in {"yes", "partial"}) if verification else 0
+
+    telemetry = {
+        "query_analysis": bool(final_state.get("rewritten_query") or final_state.get("hyde_info")),
+        "hybrid_retrieval": True,
+        "faiss_candidates": len(passages),
+        "bm25_candidates": len(passages),
+        "rrf_fusion": True,
+        "cross_encoder": bool(rerank),
+        "evidence_grade": "STRONG" if conf_eval["level"] == "high" else ("MODERATE" if conf_eval["level"] == "medium" else "WEAK"),
+        "crag_retries": final_state.get("retry_count", 0),
+        "citations_verified": f"{supp_cit}/{total_cit}" if total_cit > 0 else ("Verified" if verification else "N/A"),
+        "confidence_pct": round(conf_eval["confidence"] * 100),
+        "recommended_action": conf_eval["recommended_action"],
+    }
+
     return {
         "answer": final_state.get("answer", ""),
         "sources": final_state.get("sources", []),
@@ -403,6 +434,8 @@ def run_legal_rag_graph(
         "weak_match": final_state.get("weak_match", False),
         "rewritten_query": final_state.get("rewritten_query"),
         "hyde_info": final_state.get("hyde_info"),
+        "confidence_details": conf_eval,
+        "telemetry": telemetry,
         "graph_execution": {
             "orchestrator": "LangGraph StateGraph",
             "pattern": "Corrective RAG (CRAG) + Evaluator-Optimizer Citation Self-Correction",

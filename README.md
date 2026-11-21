@@ -31,6 +31,35 @@ PDFs / Images -> extract/clean/OCR -> chunk (180 words, 40 overlap) + metadata h
 
 ## Key Capabilities & Features
 
+### 🕸️ Feature 1: Legal Evidence & Claim Graph
+- **12 Legal Node Types**: Automatically extracts Issues, Claims, Counterclaims, Facts, Parties, Witnesses, Evidence, Statutory Provisions, Precedents, Dates/Events, Arguments, and Court Findings from case exhibits.
+- **10 Evidentiary Relationship Semantics**: Models graph links including `SUPPORTS`, `CONTRADICTS`, `CITES`, `REBUTS`, `DISTINGUISHES`, `OVERRULES`, `DEPENDS_ON`, `ASSERTED_BY`, `SUPPORTED_BY`, and `RELATED_TO`.
+- **Full Source Provenance**: Every extracted node retains the source document name, page number, verbatim passage snippet, document ID, and confidence score.
+- **Interactive SVG Visualizer**: Real-time pan/zoom SVG graph inside the Case Workspace with node type styling, dynamic relationship filters, and a slide-over provenance drawer.
+
+### 🎯 Feature 2: Adaptive Retrieval Confidence Engine
+- **Calibrated Multi-Signal Confidence**: Evaluates dense FAISS cosine similarity, BM25 keyword score, RRF reciprocal rank fusion, Cross-Encoder sigmoid logit calibration, independent supporting chunk count, source diversity, lexical token overlap, and citation verification ratios.
+- **Automated Recommended Actions**: Dynamically triggers `answer` (high confidence $\ge 0.70$), `rewrite_and_retry` (medium confidence $\ge 0.40$), or `refuse` (low confidence $< 0.40$).
+- **Explainability & Verification Telemetry**: Safe client-facing explainability panel displaying retrieval signals, model confidence, and query rewrite telemetry without exposing private system prompts.
+
+### 🏛️ Feature 3: Interactive Human vs AI Moot Court
+- **5 Adversarial Courtroom Modes**: `Full Trial (AI vs AI)`, `Step In As Petitioner (Human vs AI)`, `Step In As Respondent (Human vs AI)`, `Human Judge (Interlocutory Inquiries)`, and `Practice Mode`.
+- **8-Category Performance Scorecard**: Evaluates advocate performance across Legal Reasoning, Evidence Grounding, Precedent Usage, Statutory Accuracy, Counterargument Handling, Argument Structure, Responsiveness, and Overall Score with strict evidence-based feedback (no personality or accent scoring).
+- **Courtroom Speech & Objections**: Web Speech API voice-to-text dictation, live courtroom chess clock/timer, and an adversarial objection modal (`Relevance & Foundation`, `Misquoting the Record`, `Speculation`) with instant judicial rulings by the Bench.
+
+### ⏱️ Feature 4: Automatic Case Timeline & Conflict Detection
+- **Chronological Milestone Extraction**: Extracts legal events (Incident, Complaint, FIR, Arrest, Notice, Investigation, Chargesheet, Hearing, Order, Judgment, Appeal, Deadline) with normalized `YYYY-MM-DD` dates.
+- **Automated Date Conflict Detector**: Compares multiple case documents referencing identical milestones and flags `DATE CONFLICT` whenever exhibit dates disagree.
+- **Interactive Timeline**: Vertical timeline track with category filters, chronological/reverse-chronological sorting, and direct link to source evidence passages.
+
+### ⚡ Feature 5: Cross-Document Contradiction Detector
+- **Cross-Exhibit NLI Verification**: Automatically identifies factual discrepancies across distinct case documents (e.g., witness testimonies vs. police chargesheets vs. forensic reports).
+- **Verbatim Side-by-Side Comparison**: Contrasts Claim A vs. Claim B with exact verbatim quotes, page numbers, and severity classification (`confirmed` vs. `possible` contradiction).
+- **Direct Graph Integration**: Contradiction pairs automatically feed into the Evidence Graph as `CONTRADICTS` bidirectional edges.
+
+### 💼 Unified Case Intelligence Workspace
+- **Complete Legal Operating System**: Single unified workspace containing Overview, Evidence Graph, Chronological Timeline, Contradictions Detector, Dossier Documents, Moot Court Practice, and LEXAI conversational inquiry with real-time Evidence Radar analytics.
+
 ### 🛡️ Citizen Legal Advisor
 - **Bilingual Legal Advice**: Toggle seamlessly between English and Hindi (Devanagari script) with natural Text-to-Speech audio readout (`🔊 Listen to Advice`).
 - **3-Step Action Roadmap**: Step-by-step guidance on gathering evidence, serving statutory notice, and filing official complaints, complete with an interactive checklist and progress tracker.

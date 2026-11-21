@@ -205,6 +205,83 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
   const [isDraggingPdf, setIsDraggingPdf] = useState(false)
   const mootPdfInputRef = useRef(null)
 
+  // ── Feature 3: Interactive Courtroom Timer, Voice Input, and Objections ──
+  const [secondsElapsed, setSecondsElapsed] = useState(0)
+  const [isTimerRunning, setIsTimerRunning] = useState(false)
+  useEffect(() => {
+    let interval = null
+    if (isTimerRunning) {
+      interval = setInterval(() => setSecondsElapsed((s) => s + 1), 1000)
+    }
+    return () => clearInterval(interval)
+  }, [isTimerRunning])
+
+  const formatTimer = (secs) => {
+    const m = Math.floor(secs / 60)
+    const s = secs % 60
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  }
+
+  // Voice-to-Text Input via Web Speech API
+  const [isListeningVoice, setIsListeningVoice] = useState(false)
+  const startSpeechRecognition = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      alert('Speech recognition is not supported in this browser. Please type your argument.')
+      return
+    }
+    try {
+      const recognition = new SpeechRecognition()
+      recognition.continuous = false
+      recognition.interimResults = false
+      recognition.lang = 'en-IN'
+      recognition.onstart = () => setIsListeningVoice(true)
+      recognition.onend = () => setIsListeningVoice(false)
+      recognition.onerror = () => setIsListeningVoice(false)
+      recognition.onresult = (evt) => {
+        const transcript = evt.results[0][0].transcript
+        setUserArgument((prev) => (prev ? `${prev} ${transcript}` : transcript))
+      }
+      recognition.start()
+    } catch {
+      setIsListeningVoice(false)
+    }
+  }
+
+  // Courtroom Objection State & Ruling Dialog
+  const [objectionOpen, setObjectionOpen] = useState(false)
+  const [objectionGround, setObjectionGround] = useState('Relevance & Foundation')
+  const [objectionTarget, setObjectionTarget] = useState('')
+  const [objectionRuling, setObjectionRuling] = useState(null)
+  const [submittingObjection, setSubmittingObjection] = useState(false)
+
+  const handleRaiseObjection = async (e) => {
+    e?.preventDefault?.()
+    if (!dispute.trim()) return
+    setSubmittingObjection(true)
+    try {
+      const res = await apiFetch(`${API_BASE}/moot-court/objection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dispute: dispute.trim(),
+          objecting_party: userRole === 'petitioner' ? 'Petitioner Counsel' : 'Respondent Counsel',
+          ground: objectionGround,
+          target_statement: objectionTarget.trim() || 'Opposing submission regarding factual liability.',
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setObjectionRuling(data)
+        playGavelSound()
+      }
+    } catch (err) {
+      console.warn('Objection failed:', err)
+    } finally {
+      setSubmittingObjection(false)
+    }
+  }
+
   useEffect(() => {
     if (isOpen) setShowGuide(true)
     if (isOpen && initialQuery && !dispute) {
@@ -367,7 +444,8 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
   async function handleStartTrial(e) {
     if (e) e.preventDefault()
     if (!dispute.trim()) return
-    if (trialMode === 'human_vs_ai' && userArgument.trim().length < 15) return
+    const isAdvocateMode = trialMode !== 'ai_vs_ai' && trialMode !== 'human_judge'
+    if (isAdvocateMode && userArgument.trim().length < 15) return
 
     stopAllAudio()
     setLoading(true)
@@ -378,6 +456,8 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
     setReplyText('')
     setReplyError(null)
     setJudgeQuestion('')
+    setSecondsElapsed(0)
+    setIsTimerRunning(true)
 
     try {
       let res
@@ -388,14 +468,14 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
         form.append('dispute', dispute.trim())
         form.append('trial_mode', trialMode)
         form.append('user_role', userRole)
-        if (trialMode === 'human_vs_ai') form.append('user_argument', userArgument.trim())
+        if (isAdvocateMode) form.append('user_argument', userArgument.trim())
         res = await apiFetch(`${API_BASE}/moot-court/with-pdf`, { method: 'POST', body: form })
       } else {
         // Existing text-only path
-        const endpoint = trialMode === 'human_vs_ai'
+        const endpoint = isAdvocateMode
           ? `${API_BASE}/moot-court/human-counsel`
           : `${API_BASE}/moot-court`
-        const payload = trialMode === 'human_vs_ai'
+        const payload = isAdvocateMode
           ? { dispute: dispute.trim(), user_role: userRole, user_argument: userArgument.trim() }
           : { dispute: dispute.trim() }
         res = await apiFetch(endpoint, {
@@ -577,6 +657,20 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
               </p>
             </div>
             <div className="court-header-actions">
+              {/* Courtroom Digital Timer */}
+              <div className="courtroom-timer-badge" title="Courtroom Hearing Clock">
+                <span className="timer-icon">⏱</span>
+                <span className="timer-digits">{formatTimer(secondsElapsed)}</span>
+                <button
+                  type="button"
+                  className="timer-toggle-btn"
+                  onClick={() => setIsTimerRunning((r) => !r)}
+                  title={isTimerRunning ? 'Pause clock' : 'Start clock'}
+                >
+                  {isTimerRunning ? '⏸' : '▶'}
+                </button>
+              </div>
+
               <button type="button" className="btn-quiet" onClick={() => setShowGuide(true)}>How to use</button>
             <button
               className="court-exit-btn"
@@ -620,7 +714,7 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
         {!result && !loading && (
           <div className="court-setup-wrap">
           <div className="court-setup">
-            {/* Mode Selector Tabs */}
+            {/* Mode Selector Tabs — 5 Courtroom Roles */}
             <div className="court-mode-tabs" role="tablist" aria-label="Trial Mode">
               <button
                 type="button"
@@ -632,43 +726,59 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
               </button>
               <button
                 type="button"
-                className={`mode-tab-btn ${trialMode === 'human_vs_ai' ? 'active' : ''}`}
-                onClick={() => setTrialMode('human_vs_ai')}
+                className={`mode-tab-btn ${trialMode === 'human_vs_ai_petitioner' ? 'active' : ''}`}
+                onClick={() => {
+                  setTrialMode('human_vs_ai_petitioner')
+                  setUserRole('petitioner')
+                }}
               >
                 <span>⚔️</span>
-                <span>Step In As Counsel (Human vs AI)</span>
+                <span>Human Petitioner</span>
+              </button>
+              <button
+                type="button"
+                className={`mode-tab-btn ${trialMode === 'human_vs_ai_respondent' ? 'active' : ''}`}
+                onClick={() => {
+                  setTrialMode('human_vs_ai_respondent')
+                  setUserRole('respondent')
+                }}
+              >
+                <span>🛡️</span>
+                <span>Human Respondent</span>
+              </button>
+              <button
+                type="button"
+                className={`mode-tab-btn ${trialMode === 'human_judge' ? 'active' : ''}`}
+                onClick={() => setTrialMode('human_judge')}
+              >
+                <span>👨‍⚖️</span>
+                <span>Presiding Judge</span>
+              </button>
+              <button
+                type="button"
+                className={`mode-tab-btn ${trialMode === 'practice_mode' ? 'active' : ''}`}
+                onClick={() => {
+                  setTrialMode('practice_mode')
+                  setUserRole('petitioner')
+                }}
+              >
+                <span>🎯</span>
+                <span>Practice & Coaching</span>
               </button>
             </div>
 
             <form onSubmit={handleStartTrial}>
-              {/* If Human vs AI: Role selection */}
-              {trialMode === 'human_vs_ai' && (
-                <div style={{ marginBottom: '18px' }}>
-                  <label className="court-setup-label">Select Your Podium & Role</label>
-                  <div className="role-selector-row">
-                    <button
-                      type="button"
-                      className={`role-card-btn ${userRole === 'petitioner' ? 'active petitioner' : ''}`}
-                      onClick={() => setUserRole('petitioner')}
-                    >
-                      <span className="role-card-icon">⚖️</span>
-                      <div>
-                        <div className="role-card-title">Argue for Petitioner</div>
-                        <div className="role-card-desc">Lead the Prosecution · Establish statutory breach</div>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      className={`role-card-btn ${userRole === 'respondent' ? 'active respondent' : ''}`}
-                      onClick={() => setUserRole('respondent')}
-                    >
-                      <span className="role-card-icon">🛡️</span>
-                      <div>
-                        <div className="role-card-title">Argue for Respondent</div>
-                        <div className="role-card-desc">Lead the Defense · Rebut claims & cite exceptions</div>
-                      </div>
-                    </button>
-                  </div>
+              {/* If Human Judge Mode: instructions */}
+              {trialMode === 'human_judge' && (
+                <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'rgba(217, 119, 6, 0.08)', borderRadius: '10px', border: '1px solid rgba(217, 119, 6, 0.25)', fontSize: '12.5px', color: '#d97706' }}>
+                  👨‍⚖️ <strong>Human Judge Mode:</strong> Both Petitioner and Respondent counsels will deliver opening arguments from the judgment record. You will preside, question counsel, and render the final judicial order.
+                </div>
+              )}
+
+              {/* If Practice Mode: instructions */}
+              {trialMode === 'practice_mode' && (
+                <div style={{ marginBottom: '16px', padding: '12px 16px', background: 'rgba(99, 102, 241, 0.08)', borderRadius: '10px', border: '1px solid rgba(99, 102, 241, 0.25)', fontSize: '12.5px', color: '#818cf8' }}>
+                  🎯 <strong>Advocacy Practice Mode:</strong> Deliver oral arguments and receive live AI forensic coaching on statutory precision, factual grounding, and rhetorical structure.
                 </div>
               )}
 
@@ -799,16 +909,27 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
                 )}
               </div>
 
-              {/* If Human vs AI: Human Advocate Oral Submission Area */}
-              {trialMode === 'human_vs_ai' && (
+              {/* If Human Advocate / Practice Mode: Oral Submission Area with Voice Dictation */}
+              {trialMode !== 'ai_vs_ai' && trialMode !== 'human_judge' && (
                 <div style={{ marginTop: '20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
                     <label htmlFor="user-arg-input" className="court-setup-label" style={{ margin: 0 }}>
                       Your Oral Submission to the Bench ({userRole === 'petitioner' ? 'Petitioner Counsel' : 'Respondent Counsel'})
                     </label>
-                    <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                      Min 15 characters · Practice courtroom advocacy
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <button
+                        type="button"
+                        className={`voice-dictate-btn ${isListeningVoice ? 'listening' : ''}`}
+                        onClick={startSpeechRecognition}
+                        title="Dictate submission using speech recognition"
+                      >
+                        <span>{isListeningVoice ? '🔴' : '🎙️'}</span>
+                        <span>{isListeningVoice ? 'Listening to speech…' : 'Dictate with Voice'}</span>
+                      </button>
+                      <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
+                        Min 15 chars · Courtroom advocacy
+                      </span>
+                    </div>
                   </div>
                   <textarea
                     id="user-arg-input"
@@ -837,7 +958,7 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
                           onClick={() => setUserArgument(st.text)}
                           title="Click to insert argument skeleton"
                         >
-                          ✦ {st.label}
+                          ✧ {st.label}
                         </button>
                       ))}
                     </div>
@@ -857,7 +978,7 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
                 disabled={
                   !mootPdf ||
                   dispute.trim().length < 10 ||
-                  (trialMode === 'human_vs_ai' && userArgument.trim().length < 15)
+                  (trialMode !== 'ai_vs_ai' && trialMode !== 'human_judge' && userArgument.trim().length < 15)
                 }
               >
                 <span>{trialMode === 'human_vs_ai' ? '⚔️' : '🏛️'}</span>
@@ -1104,50 +1225,88 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
                   </div>
 
                   <div className="scorecard-body">
-                    {/* 3 Metric Gauges */}
-                    <div className="score-gauges-grid">
-                      <div className="gauge-card">
-                        <span className="gauge-label">Statutory Precision</span>
-                        <div className="gauge-val-row">
-                          <span className="gauge-num">{result.scorecard.statutory_precision || 0}</span>
-                          <span className="gauge-max">/ 10</span>
+                    {/* 8-Category Performance Scorecard (Feature 3) */}
+                    {result.scorecard.eight_categories ? (
+                      <div className="eight-categories-section">
+                        <div className="categories-header-note">
+                          <span>⚖️ Objective Judicial Evaluation (Strictly Evidence-Based · No Personality Scoring)</span>
+                          <span className="total-score-pill">Overall: {result.scorecard.overall_score || 80}/100</span>
                         </div>
-                        <div className="gauge-bar-track">
-                          <div
-                            className="gauge-bar-fill"
-                            style={{ width: `${Math.min(100, (result.scorecard.statutory_precision || 0) * 10)}%` }}
-                          />
-                        </div>
-                      </div>
+                        <div className="eight-categories-grid">
+                          {Object.entries(result.scorecard.eight_categories).map(([key, item]) => {
+                            const title = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                            const score = item.score ?? 8
+                            const max = item.max ?? 10
+                            const pct = Math.round((score / max) * 100)
+                            const color = pct >= 80 ? '#22c55e' : pct >= 60 ? '#f59e0b' : '#ef4444'
 
-                      <div className="gauge-card">
-                        <span className="gauge-label">Relevance of Precedents</span>
-                        <div className="gauge-val-row">
-                          <span className="gauge-num">{result.scorecard.precedents_score || 0}</span>
-                          <span className="gauge-max">/ 10</span>
+                            return (
+                              <div key={key} className="eight-cat-card">
+                                <div className="cat-top">
+                                  <strong className="cat-title">{title}</strong>
+                                  <span className="cat-score" style={{ color }}>{score}/{max}</span>
+                                </div>
+                                <div className="cat-bar-track">
+                                  <div className="cat-bar-fill" style={{ width: `${pct}%`, background: color }} />
+                                </div>
+                                <p className="cat-feedback">{item.feedback}</p>
+                              </div>
+                            )
+                          })}
                         </div>
-                        <div className="gauge-bar-track">
-                          <div
-                            className="gauge-bar-fill"
-                            style={{ width: `${Math.min(100, (result.scorecard.precedents_score || 0) * 10)}%` }}
-                          />
-                        </div>
+                        {result.scorecard.executive_critique && (
+                          <div className="executive-critique-banner">
+                            <strong>Bench Executive Critique: </strong>
+                            <span>{result.scorecard.executive_critique}</span>
+                          </div>
+                        )}
                       </div>
+                    ) : (
+                      /* Fallback 3 Metric Gauges */
+                      <div className="score-gauges-grid">
+                        <div className="gauge-card">
+                          <span className="gauge-label">Statutory Precision</span>
+                          <div className="gauge-val-row">
+                            <span className="gauge-num">{result.scorecard.statutory_precision || 0}</span>
+                            <span className="gauge-max">/ 10</span>
+                          </div>
+                          <div className="gauge-bar-track">
+                            <div
+                              className="gauge-bar-fill"
+                              style={{ width: `${Math.min(100, (result.scorecard.statutory_precision || 0) * 10)}%` }}
+                            />
+                          </div>
+                        </div>
 
-                      <div className="gauge-card">
-                        <span className="gauge-label">Courtroom Etiquette</span>
-                        <div className="gauge-val-row">
-                          <span className="gauge-num">{result.scorecard.courtroom_etiquette || 0}</span>
-                          <span className="gauge-max">/ 10</span>
+                        <div className="gauge-card">
+                          <span className="gauge-label">Relevance of Precedents</span>
+                          <div className="gauge-val-row">
+                            <span className="gauge-num">{result.scorecard.precedents_score || 0}</span>
+                            <span className="gauge-max">/ 10</span>
+                          </div>
+                          <div className="gauge-bar-track">
+                            <div
+                              className="gauge-bar-fill"
+                              style={{ width: `${Math.min(100, (result.scorecard.precedents_score || 0) * 10)}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="gauge-bar-track">
-                          <div
-                            className="gauge-bar-fill"
-                            style={{ width: `${Math.min(100, (result.scorecard.courtroom_etiquette || 0) * 10)}%` }}
-                          />
+
+                        <div className="gauge-card">
+                          <span className="gauge-label">Courtroom Etiquette</span>
+                          <div className="gauge-val-row">
+                            <span className="gauge-num">{result.scorecard.courtroom_etiquette || 0}</span>
+                            <span className="gauge-max">/ 10</span>
+                          </div>
+                          <div className="gauge-bar-track">
+                            <div
+                              className="gauge-bar-fill"
+                              style={{ width: `${Math.min(100, (result.scorecard.courtroom_etiquette || 0) * 10)}%` }}
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Strengths & Vulnerabilities */}
                     <div className="scorecard-critique-row">
@@ -1416,10 +1575,29 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
                       <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)' }}>
                         Your Next Submission
                       </span>
-                      <span style={{ fontSize: '11px', color: 'var(--muted)', marginLeft: 'auto' }}>
+                      <button
+                        type="button"
+                        className="btn-quiet small objection-btn"
+                        onClick={() => setObjectionOpen(true)}
+                        style={{ marginLeft: 'auto', marginRight: '10px', color: '#f59e0b', borderColor: 'rgba(245, 158, 11, 0.3)' }}
+                        title="Raise an objection to opposing counsel's argument"
+                      >
+                        ⚠️ Raise Objection
+                      </button>
+                      <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
                         {replyText.length}/4000 chars
                       </span>
                     </div>
+
+                    {objectionRuling && (
+                      <div className="bench-objection-ruling" style={{ margin: '8px 0', padding: '10px 14px', borderRadius: '8px', background: objectionRuling.ruling === 'SUSTAINED' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${objectionRuling.ruling === 'SUSTAINED' ? '#22c55e' : '#ef4444'}` }}>
+                        <strong style={{ color: objectionRuling.ruling === 'SUSTAINED' ? '#22c55e' : '#ef4444' }}>
+                          🏛️ BENCH RULING: {objectionRuling.ruling}
+                        </strong>
+                        <p style={{ margin: '4px 0 0', fontSize: '12px' }}>{objectionRuling.bench_response}</p>
+                      </div>
+                    )}
+
                     <textarea
                       ref={replyInputRef}
                       id="debate-reply-input"
@@ -1562,6 +1740,63 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
         )}
         </div>
       </div>
+
+      {/* Courtroom Objection Dialog Backdrop */}
+      {objectionOpen && (
+        <div className="objection-dialog-backdrop" onClick={() => setObjectionOpen(false)}>
+          <div className="objection-dialog-card" onClick={(e) => e.stopPropagation()}>
+            <div className="objection-dialog-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '20px' }}>⚖️</span>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#f59e0b' }}>Raise Courtroom Objection</h3>
+              </div>
+              <button type="button" className="btn-quiet small" onClick={() => setObjectionOpen(false)} style={{ cursor: 'pointer' }}>✕</button>
+            </div>
+            <p style={{ fontSize: '13px', color: 'var(--muted)', margin: '10px 0 16px' }}>
+              Submit an adversarial objection against opposing counsel's argument. The Presiding Bench will immediately evaluate the evidentiary record and deliver an authoritative ruling.
+            </p>
+            <div className="objection-field-group" style={{ marginBottom: '14px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}>Legal Ground for Objection</label>
+              <select
+                value={objectionGround}
+                onChange={(e) => setObjectionGround(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface-raised, #182234)', color: 'var(--ink)' }}
+              >
+                <option value="Relevance & Foundation">Relevance & Foundation (Not supported by record)</option>
+                <option value="Misquoting the Record / Judgment">Misquoting the Record or Judgment</option>
+                <option value="Speculation / Conjectures">Speculation & Conjectures without evidence</option>
+                <option value="Leading / Prejudicial Submission">Prejudicial / Conjectural Characterization</option>
+                <option value="Statutory Misdirection">Misapplication of Statutory Provision</option>
+              </select>
+            </div>
+            <div className="objection-field-group" style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--ink)', marginBottom: '6px' }}>Specific Submission Objected To</label>
+              <textarea
+                rows={3}
+                placeholder="Identify or quote the objectionable statement from opposing counsel..."
+                value={objectionTarget}
+                onChange={(e) => setObjectionTarget(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface-raised, #182234)', color: 'var(--ink)', resize: 'vertical' }}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button type="button" className="btn-quiet" onClick={() => setObjectionOpen(false)}>Cancel</button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={submittingObjection}
+                onClick={async (e) => {
+                  await handleRaiseObjection(e)
+                  setObjectionOpen(false)
+                }}
+                style={{ background: '#d97706', borderColor: '#b45309' }}
+              >
+                {submittingObjection ? 'Addressing Bench...' : 'Submit to Bench ⚖'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

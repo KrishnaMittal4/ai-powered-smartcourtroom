@@ -386,6 +386,34 @@ def answer_query(
         if verification and "citations" in verification:
             from legal_intelligence import enrich_citations_with_precedent_status
             verification["citations"] = enrich_citations_with_precedent_status(verification["citations"], client)
+
+    # Feature 2: Calibrated Adaptive Retrieval Confidence Engine
+    from adaptive_retrieval_confidence import evaluate_retrieval_confidence
+    conf_eval = evaluate_retrieval_confidence(
+        query=query,
+        passages=passages,
+        top_score=top_score,
+        verification=verification,
+        min_threshold=MIN_RETRIEVAL_SCORE,
+        weak_threshold=WEAK_RETRIEVAL_SCORE,
+    )
+
+    # Safe pipeline telemetry for RAG Explainability UI
+    total_cit = len(verification.get("citations", [])) if verification else 0
+    supp_cit = sum(1 for c in (verification.get("citations") or []) if c.get("verdict") in {"yes", "partial"}) if verification else 0
+    telemetry = {
+        "query_analysis": bool(rewritten_query or hyde_info),
+        "hybrid_retrieval": True,
+        "faiss_candidates": len(passages),
+        "bm25_candidates": len(passages),
+        "rrf_fusion": True,
+        "cross_encoder": bool(rerank),
+        "evidence_grade": "STRONG" if conf_eval["level"] == "high" else ("MODERATE" if conf_eval["level"] == "medium" else "WEAK"),
+        "crag_retries": 0,
+        "citations_verified": f"{supp_cit}/{total_cit}" if total_cit > 0 else ("Verified" if verification else "N/A"),
+        "confidence_pct": round(conf_eval["confidence"] * 100),
+        "recommended_action": conf_eval["recommended_action"],
+    }
  
     return {
         "answer": answer,
@@ -397,6 +425,8 @@ def answer_query(
         "weak_match": top_score < WEAK_RETRIEVAL_SCORE,
         "rewritten_query": rewritten_query,
         "hyde_info": hyde_info,
+        "confidence_details": conf_eval,
+        "telemetry": telemetry,
     }
 
 

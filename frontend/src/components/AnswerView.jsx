@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { renderMarkdown } from '../lib/safeHtml.js'
 import { annotateAnswer, summarize, toMarkdown, download, verdictOf, followUps, submitFeedback, VERDICT_LABEL } from '../lib/utils.js'
 import DraftModal from './DraftModal.jsx'
+import RagExplainability from './RagExplainability.jsx'
 
 const LEVELS = {
   high: { label: 'All citations verified', cls: 'high', icon: '✓', sub: 'Every legal claim matches the cited judgment record' },
@@ -353,6 +354,9 @@ export default function AnswerView({
 
       {/* 2. CITATION VERIFICATION TRUST BAR */}
       {!streaming && <TrustBar verification={entry.verification} />}
+      {!streaming && (entry.telemetry || entry.confidence_details) && (
+        <RagExplainability telemetry={entry.telemetry} confidenceDetails={entry.confidence_details} />
+      )}
       {streaming && entry._verifying && (
         <div className="trust-card review" role="status">
           <div className="trust-card-top">

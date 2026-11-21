@@ -610,11 +610,12 @@ export default function App({ user, onLogout }) {
           onOpen={openItem} onNew={newResearch} onToggleSave={toggleSave}
           onDelete={remove} onClear={() => { setHistory([]); setActiveId(null) }} onClose={() => setMenu(false)}
           appMode={appMode}
+          setAppMode={setAppMode}
           globalCorpusAvailable={globalCorpusAvailable}
           onUploadResearch={()=>{setAppMode('research');setActiveCaseId('');setCasesOpen(false);setTimeout(()=>quickPdfInputRef.current?.click(),50)}}
           onGlobal={()=>{setAppMode('research');setActiveCaseId('');setCasesOpen(false);newResearch()}}
-          onCases={()=>{setAppMode('research');setActiveCaseId('');setCasesOpen(true);setActiveId(null);setCitizenResult(null)}}
-          onMoot={()=>{setMootQuery(question||'');setMootOpen(true)}}
+          onCases={(tab)=>{setAppMode('research');setActiveCaseId('');setCasesOpen(true);if(typeof tab==='string') setInitialCaseTab(tab);setActiveId(null);setCitizenResult(null)}}
+          onMoot={(mode)=>{setMootQuery(question||'');setMootOpen(true)}}
           onDraft={()=>{setDraftPrefill(null);setCitizenDraftOpen(true)}}
           onBnsLens={()=>setBnsLensOpen(true)}
           onScanNotice={()=>setScanNoticeOpen(true)}
