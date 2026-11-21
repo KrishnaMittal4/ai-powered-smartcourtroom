@@ -810,18 +810,6 @@ export default function App({ user, onLogout }) {
                       <small>Prepare formal notices & petitions</small>
                     </button>
                   </div>
-
-                  <div className="sample-case-row">
-                    <button
-                      type="button"
-                      className="sample-case-chip"
-                      onClick={handleLoadSampleCase}
-                      disabled={quickPdfUploading}
-                      title="Load a sample Section 138 NI Act Cheque Bounce case to test all features instantly"
-                    >
-                      ⚡ Quick Demo: Load Sample NI Act §138 Cheque Bounce Case
-                    </button>
-                  </div>
                 </>
               )}
 
@@ -986,6 +974,10 @@ export default function App({ user, onLogout }) {
               <Evidence key={entry.id} entry={entry} focus={focus} />
             </div>
           )}
+
+          <footer className="site-app-copyright">
+            <p>© 2026 Krishna Mittal. All Rights Reserved. · AI-Powered Smart Courtroom</p>
+          </footer>
         </main>
       </div>
       {globalCorpusAvailable && uploadOpen && <div className="modal-backdrop" onMouseDown={(e)=>{if(e.target===e.currentTarget&&!uploading)setUploadOpen(false)}}><section className="judgment-upload-modal" role="dialog" aria-modal="true" aria-label="Upload judgments"><header><div><span className="eyebrow">LEGAL KNOWLEDGE BASE</span><h2>Upload Judgments</h2><p>Add PDF judgments without exposing raw indexed passages.</p></div><button className="modal-close" disabled={uploading} onClick={()=>setUploadOpen(false)}>✕</button></header><button className="judgment-dropzone" type="button" onClick={()=>fileInputRef.current?.click()} onDragOver={(e)=>e.preventDefault()} onDrop={(e)=>{e.preventDefault();stageJudgments(e.dataTransfer.files)}} disabled={uploading}><span>📄</span><b>Select judgment PDFs</b><small>PDF only · duplicates are detected before indexing</small></button>{uploadFiles.length>0&&<div className="judgment-file-list">{uploadFiles.map((x,i)=><div className={`judgment-file-row ${x.status}`} key={`${x.file.name}-${i}`}><span className="file-icon">📄</span><div><b>{x.file.name}</b><small>{(x.file.size/1024/1024).toFixed(2)} MB · {x.note}</small></div><span className="file-state">{x.status==='done'?'✓':x.status==='uploading'?'…':x.status==='exists'?'↻':x.status==='error'?'!':x.status==='invalid'?'×':'Ready'}</span></div>)}</div>}{uploadFiles.some(x=>x.status==='exists')&&<label className="replace-check"><input type="checkbox" checked={replaceExisting} onChange={e=>setReplaceExisting(e.target.checked)}/><span><b>Replace existing judgments</b><small>Re-index selected files that already exist. Existing corpus entries are replaced, not duplicated.</small></span></label>}<footer><button className="btn-quiet" disabled={uploading} onClick={()=>setUploadOpen(false)}>Close</button><button className="btn-primary" disabled={uploading||!uploadFiles.some(x=>x.status==='ready'||(replaceExisting&&x.status==='exists'))} onClick={uploadStagedJudgments}>{uploading?'Indexing…':'Add to Knowledge Base'}</button></footer></section></div>}

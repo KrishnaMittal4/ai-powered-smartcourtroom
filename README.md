@@ -422,3 +422,14 @@ The clause analyzer (`POST /analyze-document`) allows users to audit legal notic
   3. *Employment Non-Compete Notice*: Detects post-termination non-compete restraints void under Section 27 of the Indian Contract Act and punitive liquidated damages clauses.
 - **Image & Camera Photo OCR**: Supports camera photos and image scans (JPG, PNG, WEBP) in addition to digital PDFs and TXT files.
 - **1-Click WhatsApp Export**: Red-flagged findings, response deadlines, and counter-reply drafts can be shared directly via WhatsApp with one click.
+
+---
+
+## ⚖️ Copyright & License
+
+**© 2026 Krishna Mittal. All Rights Reserved.**  
+**AI-Powered Smart Courtroom**
+
+This software, source code, UI/UX design, documentation, and associated brand assets are the intellectual property of **Krishna Mittal**.
+
+All rights are reserved. No part of this repository, application, website, or codebase may be copied, reproduced, distributed, modified, mirrored, hosted, published, reverse engineered, decompiled, or transmitted in any form or by any means (electronic, mechanical, recording, or otherwise) without prior explicit written permission from the copyright holder.

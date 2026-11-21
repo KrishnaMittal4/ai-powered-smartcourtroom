@@ -59,16 +59,6 @@ export default function PublicLanding({ onRequireAuth, onSignIn, onCreateAccount
                 <span>Browse Case Files</span>
                 <span className="btn-arrow">→</span>
               </button>
-              <button
-                type="button"
-                className="btn-intake-sample"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  gate('sample')()
-                }}
-              >
-                <span>⚡ Try Sample Case (§138 NI Act Cheque Bounce)</span>
-              </button>
             </div>
           </div>
 
@@ -169,6 +159,16 @@ export default function PublicLanding({ onRequireAuth, onSignIn, onCreateAccount
               <p>Sign in before uploading. LEXAI keeps case ownership strictly isolated to your account and verifies answers against uploaded evidence.</p>
             </div>
           </section>
+
+          {/* Reserved Rights Copyright Footer */}
+          <footer className="public-footer-copyright">
+            <div className="copyright-line">
+              © 2026 Krishna Mittal. All Rights Reserved.
+            </div>
+            <div className="copyright-subline">
+              AI-Powered Smart Courtroom
+            </div>
+          </footer>
         </section>
       </main>
     </div>
