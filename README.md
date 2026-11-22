@@ -291,11 +291,11 @@ Permanent case deletion also clears private documents, private retrieval artifac
 ## RAG Quality Lab V2
 Developer > RAG Inspector now evaluates unique judgments rather than duplicate chunks. It supports canonical judgment matching, configurable candidate pools/RRF/reranking, per-question HIT/MISS diagnostics, candidate journeys, benchmark JSON/CSV import, and experiment export. RAG Lab is offline and does not call Groq or Gemini. Experiment settings do not change production Advocate Research.
 
-## RAG 100-question benchmark update
-RAG Lab can now generate a reproducible 100-question offline retrieval benchmark directly from the judgment records loaded by the local FAISS index (`GET /rag/benchmark/generate`). Generated items are grounded in real indexed passages and source judgments, carry category/difficulty metadata, graded relevance, and are explicitly marked `needs_human_review` before academic reporting. Evaluation now reports Hit@K, Precision@K, Recall@K, MRR, nDCG@K and independently measured stage latency. Normal Advocate Research settings are unchanged.
+## RAG 1000-question benchmark update
+RAG Lab can now generate a reproducible 1000-question offline retrieval benchmark directly from the judgment records loaded by the local FAISS index (`GET /rag/benchmark/generate`). Generated items are grounded in real indexed passages and source judgments, carry category/difficulty metadata, graded relevance, and are explicitly marked `needs_human_review` before academic reporting. Evaluation now reports Hit@K, Precision@K, Recall@K, MRR, nDCG@K and independently measured stage latency. Normal Advocate Research settings are unchanged.
 
 ## Benchmark Runner (progress/cancel/cache)
-The offline 100-question RAG benchmark now runs as a background job. RAG Lab shows real backend progress, elapsed time, ETA, current retrieval stage, and cache hits. The run can be cancelled safely; completed per-question retrieval results remain cached in memory and are reused when the same benchmark/settings are run again. Changing retrieval settings creates different cache keys. No Groq/Gemini calls are used by this runner.
+The offline 1000-question RAG benchmark now runs as a background job. RAG Lab shows real backend progress, elapsed time, ETA, current retrieval stage, and cache hits. The run can be cancelled safely; completed per-question retrieval results remain cached in memory and are reused when the same benchmark/settings are run again. Changing retrieval settings creates different cache keys. No Groq/Gemini calls are used by this runner.
 
 ## RAG Evaluation V3
 
