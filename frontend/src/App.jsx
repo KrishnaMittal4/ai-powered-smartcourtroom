@@ -615,6 +615,7 @@ export default function App({ user, onLogout }) {
           onUploadResearch={()=>{setAppMode('research');setActiveCaseId('');setCasesOpen(false);setTimeout(()=>quickPdfInputRef.current?.click(),50)}}
           onGlobal={()=>{setAppMode('research');setActiveCaseId('');setCasesOpen(false);newResearch()}}
           onCases={(tab)=>{setAppMode('research');setActiveCaseId('');setCasesOpen(true);if(typeof tab==='string') setInitialCaseTab(tab);setActiveId(null);setCitizenResult(null)}}
+          onNewCase={()=>{setAppMode('research');setCasesOpen(true);makeCase()}}
           onMoot={(mode)=>{setMootQuery(question||'');setMootOpen(true)}}
           onDraft={()=>{setDraftPrefill(null);setCitizenDraftOpen(true)}}
           onBnsLens={()=>setBnsLensOpen(true)}

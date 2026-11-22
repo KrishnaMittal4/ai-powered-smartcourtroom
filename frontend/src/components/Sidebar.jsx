@@ -15,6 +15,7 @@ export default function Sidebar({
   setAppMode,
   onGlobal,
   onCases,
+  onNewCase,
   onMoot,
   onDraft,
   onBnsLens,
@@ -43,47 +44,9 @@ export default function Sidebar({
       </div>
 
       <nav className="advocate-nav" aria-label="Platform Tools">
-        {/* RESEARCH */}
+        {/* 1. CASE MATTERS */}
         <div className="nav-section-header">
-          <span className="section-title">RESEARCH</span>
-        </div>
-        <button
-          type="button"
-          className="nav-item-btn"
-          onClick={() => {
-            onUploadResearch?.()
-            onClose()
-          }}
-        >
-          <span className="nav-icon">📄</span>
-          <span>Legal Research</span>
-        </button>
-        <button
-          type="button"
-          className="nav-item-btn"
-          onClick={() => {
-            onGlobal?.()
-            onClose()
-          }}
-        >
-          <span className="nav-icon">🔍</span>
-          <span>Similar Cases</span>
-        </button>
-        <button
-          type="button"
-          className="nav-item-btn"
-          onClick={() => {
-            onBnsLens?.()
-            onClose()
-          }}
-        >
-          <span className="nav-icon">⚖️</span>
-          <span>BNS ↔ IPC Lens</span>
-        </button>
-
-        {/* CASE INTELLIGENCE */}
-        <div className="nav-section-header">
-          <span className="section-title">CASE INTELLIGENCE</span>
+          <span className="section-title">CASE MATTERS</span>
         </div>
         <button
           type="button"
@@ -98,41 +61,50 @@ export default function Sidebar({
         </button>
         <button
           type="button"
-          className="nav-item-btn"
+          className="nav-item-btn nav-item-highlight"
           onClick={() => {
-            onCases?.('evidence_graph')
+            if (onNewCase) {
+              onNewCase()
+            } else {
+              onCases?.('overview')
+            }
             onClose()
           }}
         >
-          <span className="nav-icon">🕸️</span>
-          <span>Evidence Graph</span>
-        </button>
-        <button
-          type="button"
-          className="nav-item-btn"
-          onClick={() => {
-            onCases?.('timeline')
-            onClose()
-          }}
-        >
-          <span className="nav-icon">⏱️</span>
-          <span>Case Timeline</span>
-        </button>
-        <button
-          type="button"
-          className="nav-item-btn"
-          onClick={() => {
-            onCases?.('contradictions')
-            onClose()
-          }}
-        >
-          <span className="nav-icon">⚡</span>
-          <span>Contradictions</span>
+          <span className="nav-icon">➕</span>
+          <span>New Case Intake</span>
         </button>
 
-        {/* COURTROOM */}
+        {/* 2. RESEARCH & STATUTES */}
         <div className="nav-section-header">
-          <span className="section-title">COURTROOM</span>
+          <span className="section-title">RESEARCH & STATUTES</span>
+        </div>
+        <button
+          type="button"
+          className="nav-item-btn"
+          onClick={() => {
+            onGlobal?.()
+            onClose()
+          }}
+        >
+          <span className="nav-icon">🔍</span>
+          <span>Legal Research</span>
+        </button>
+        <button
+          type="button"
+          className="nav-item-btn"
+          onClick={() => {
+            onBnsLens?.()
+            onClose()
+          }}
+        >
+          <span className="nav-icon">⚖️</span>
+          <span>BNS ↔ IPC Transition Lens</span>
+        </button>
+
+        {/* 3. ADVERSARIAL TRIAL */}
+        <div className="nav-section-header">
+          <span className="section-title">ADVERSARIAL TRIAL</span>
         </div>
         <button
           type="button"
@@ -143,35 +115,16 @@ export default function Sidebar({
           }}
         >
           <span className="nav-icon">🏛️</span>
-          <span>Moot Court</span>
-        </button>
-        <button
-          type="button"
-          className="nav-item-btn"
-          onClick={() => {
-            onMoot?.('human_vs_ai_petitioner')
-            onClose()
-          }}
-        >
-          <span className="nav-icon">⚔️</span>
-          <span>Human vs AI Practice</span>
+          <span className="nav-label-with-tag">
+            <span>Moot Court Arena</span>
+            <span className="nav-badge-tag">5 MODES</span>
+          </span>
         </button>
 
-        {/* TOOLS */}
+        {/* 4. ADVOCATE WORKBENCH */}
         <div className="nav-section-header">
-          <span className="section-title">TOOLS</span>
+          <span className="section-title">ADVOCATE WORKBENCH</span>
         </div>
-        <button
-          type="button"
-          className="nav-item-btn"
-          onClick={() => {
-            setAppMode?.('citizen')
-            onClose()
-          }}
-        >
-          <span className="nav-icon">🛡️</span>
-          <span>Citizen Legal Advisor</span>
-        </button>
         <button
           type="button"
           className="nav-item-btn"
@@ -181,7 +134,7 @@ export default function Sidebar({
           }}
         >
           <span className="nav-icon">📑</span>
-          <span>Scan Notice / Contract</span>
+          <span>Notice & Contract Scanner</span>
         </button>
         <button
           type="button"
@@ -192,7 +145,18 @@ export default function Sidebar({
           }}
         >
           <span className="nav-icon">✎</span>
-          <span>Legal Drafting</span>
+          <span>Legal Drafting Studio</span>
+        </button>
+        <button
+          type="button"
+          className="nav-item-btn"
+          onClick={() => {
+            setAppMode?.('citizen')
+            onClose()
+          }}
+        >
+          <span className="nav-icon">🛡️</span>
+          <span>Citizen Legal Aid (Jan Sunwai)</span>
         </button>
       </nav>
 

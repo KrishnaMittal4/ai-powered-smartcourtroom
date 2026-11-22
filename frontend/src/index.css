@@ -3785,6 +3785,26 @@ kbd{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:var(--
   font-size: 15px;
   opacity: 0.85;
 }
+.nav-item-highlight {
+  color: var(--gold) !important;
+  font-weight: 600 !important;
+}
+.nav-label-with-tag {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.nav-badge-tag {
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(197, 160, 89, 0.15);
+  color: var(--gold);
+  border: 1px solid rgba(197, 160, 89, 0.35);
+}
 .sidebar-history-section {
   margin-top: 16px;
   padding-top: 12px;
