@@ -3,6 +3,7 @@ import { renderMarkdown } from '../lib/safeHtml.js'
 import { annotateAnswer, summarize, toMarkdown, download, verdictOf, followUps, submitFeedback, VERDICT_LABEL } from '../lib/utils.js'
 import DraftModal from './DraftModal.jsx'
 import RagExplainability from './RagExplainability.jsx'
+import DocumentSplitViewer from './DocumentSplitViewer.jsx'
 
 const LEVELS = {
   high: { label: 'All citations verified', cls: 'high', icon: '✓', sub: 'Every legal claim matches the cited judgment record' },
@@ -121,6 +122,7 @@ export default function AnswerView({
   const [draftOpen, setDraftOpen] = useState(false)
   const [sourceFeedback, setSourceFeedback] = useState(false)
   const [fontSize, setFontSize] = useState('normal') // 'normal' | 'large'
+  const [activeSplitDoc, setActiveSplitDoc] = useState(null)
 
   async function markTopSourceCorrect() {
     const src = entry.sources?.[0]
@@ -191,10 +193,14 @@ export default function AnswerView({
       e.preventDefault()
       const { kind, index } = btn.dataset
       if (kind && index != null) {
-        onJump(kind, Number(index))
+        onJump?.(kind, Number(index))
+        const numIdx = Number(index)
+        const cit = kind === 'citation' ? entry.verification?.citations?.[numIdx] : null
+        const src = entry.sources?.[numIdx] || entry.sources?.[0]
+        setActiveSplitDoc({ citation: cit, passage: src })
       }
     }
-  }, [onJump])
+  }, [onJump, entry])
 
   async function copy(kind) {
     const text = kind === 'md' ? toMarkdown(entry) : answerText
@@ -263,15 +269,25 @@ export default function AnswerView({
               </span>
               <span className="grounded-check-tag">✓ Grounded in Judgment</span>
             </div>
-            <button
-              type="button"
-              className={`source-correct-btn ${sourceFeedback ? 'active' : ''}`}
-              onClick={markTopSourceCorrect}
-              disabled={sourceFeedback}
-              title="Teach retrieval engine that this was the exact supporting source"
-            >
-              {sourceFeedback ? '✓ Learned for Retrieval' : '✓ Confirm Source'}
-            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="source-inspect-btn"
+                onClick={() => setActiveSplitDoc({ citation: entry.verification?.citations?.[0], passage: entry.sources[0] })}
+                title="Open Split-Screen Citation Drawer"
+              >
+                🔍 Inspect Exhibit
+              </button>
+              <button
+                type="button"
+                className={`source-correct-btn ${sourceFeedback ? 'active' : ''}`}
+                onClick={markTopSourceCorrect}
+                disabled={sourceFeedback}
+                title="Teach retrieval engine that this was the exact supporting source"
+              >
+                {sourceFeedback ? '✓ Learned for Retrieval' : '✓ Confirm Source'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -463,6 +479,12 @@ export default function AnswerView({
       </footer>
 
       <DraftModal isOpen={draftOpen} onClose={() => setDraftOpen(false)} entry={entry} />
+      <DocumentSplitViewer
+        isOpen={Boolean(activeSplitDoc)}
+        onClose={() => setActiveSplitDoc(null)}
+        citation={activeSplitDoc?.citation}
+        passage={activeSplitDoc?.passage}
+      />
     </article>
   )
 }

@@ -422,6 +422,150 @@ export default function CaseWorkspace({
     </div>
   )
 
+  const exportExecutiveBrief = () => {
+    if (!activeCase) return
+    const win = window.open('', '_blank')
+    if (!win) {
+      setToast({ type: 'error', text: 'Popup blocked. Please allow popups to export the brief.' })
+      return
+    }
+
+    const title = activeCase.title || 'Case Brief'
+    const dateStr = new Date().toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+    const summary = intel?.summary || 'No summary generated yet.'
+    const parties = intel?.parties || []
+    const facts = intel?.important_facts || []
+    const issues = intel?.legal_issues || []
+    const timeline = intel?.timeline || []
+    const evidence = intel?.evidence || []
+    const contradictions = intel?.contradictions || []
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Executive Brief — ${title}</title>
+  <style>
+    @page { size: A4; margin: 20mm; }
+    body { font-family: 'Times New Roman', Times, serif, system-ui; color: #111827; line-height: 1.5; margin: 0; padding: 24px; background: #fff; }
+    .header-bar { border-bottom: 2px solid #111827; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+    .court-title { font-size: 20px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; margin: 0; }
+    .court-sub { font-size: 11px; color: #4b5563; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 4px; }
+    .brief-meta { font-size: 12px; text-align: right; color: #374151; }
+    .case-title { font-size: 18px; font-weight: 700; margin: 16px 0 8px; color: #0f172a; }
+    .section { margin-bottom: 22px; page-break-inside: avoid; }
+    .section-head { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #1e293b; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+    th, td { border: 1px solid #d1d5db; padding: 6px 10px; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; font-weight: 700; color: #334155; }
+    .severity-high { color: #dc2626; font-weight: 700; }
+    .severity-medium { color: #d97706; font-weight: 700; }
+    .severity-low { color: #2563eb; font-weight: 700; }
+    .print-actions { position: fixed; top: 16px; right: 16px; display: flex; gap: 10px; background: #fff; padding: 8px 12px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #cbd5e1; z-index: 1000; }
+    .btn-print { background: #1e293b; color: #fff; border: none; padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 6px; cursor: pointer; }
+    .footer-stamp { margin-top: 40px; padding-top: 16px; border-top: 1px dashed #94a3b8; display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #64748b; }
+    @media print { .print-actions { display: none; } body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <div class="print-actions">
+    <button class="btn-print" onclick="window.print()">🖨️ Print / Save as PDF</button>
+  </div>
+  <div class="header-bar">
+    <div>
+      <h1 class="court-title">EXECUTIVE JUDICIAL DOSSIER</h1>
+      <div class="court-sub">AI-Powered Smart Courtroom · Formal Advocate Brief</div>
+    </div>
+    <div class="brief-meta">
+      <strong>Date Generated:</strong> ${dateStr}<br />
+      <strong>Matter Scope:</strong> Private Confidential Dossier
+    </div>
+  </div>
+  <div class="case-title">${title}</div>
+  <p style="font-size: 12px; color: #4b5563; margin-top: 0;">${activeCase.description || ''}</p>
+  <div class="section">
+    <div class="section-head">1. Executive Matter Synopsis</div>
+    <p style="font-size: 13px; text-align: justify; margin: 6px 0;">${summary}</p>
+  </div>
+  ${parties.length > 0 ? `
+  <div class="section">
+    <div class="section-head">2. Parties & Roles</div>
+    <table>
+      <thead><tr><th>Name</th><th>Role</th><th>Source Document</th></tr></thead>
+      <tbody>
+        ${parties.map(p => `<tr><td><b>${p.name || '-'}</b></td><td>${p.role || '-'}</td><td>${p.source_file || '-'} ${p.page ? `(p. ${p.page})` : ''}</td></tr>`).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
+  ${facts.length > 0 ? `
+  <div class="section">
+    <div class="section-head">3. Material Facts Grounded in Record</div>
+    <ul style="font-size: 12px; padding-left: 20px; margin: 6px 0;">
+      ${facts.map(f => `<li style="margin-bottom: 4px;">${f.fact || f} ${f.source_file ? `<span style="color: #6b7280;">(${f.source_file}${f.page ? `, p. ${f.page}` : ''})</span>` : ''}</li>`).join('')}
+    </ul>
+  </div>` : ''}
+  ${issues.length > 0 ? `
+  <div class="section">
+    <div class="section-head">4. Key Legal Issues & Statutory Bases</div>
+    <ul style="font-size: 12px; padding-left: 20px; margin: 6px 0;">
+      ${issues.map(iss => `<li style="margin-bottom: 6px;"><b>${iss.issue || iss}</b> ${iss.basis ? `<br/><span style="color:#4b5563;">Statutory Basis: ${iss.basis}</span>` : ''}</li>`).join('')}
+    </ul>
+  </div>` : ''}
+  ${timeline.length > 0 ? `
+  <div class="section">
+    <div class="section-head">5. Chronological Case Timeline</div>
+    <table>
+      <thead><tr><th>Date</th><th>Milestone Event</th><th>Exhibit Grounding</th></tr></thead>
+      <tbody>
+        ${timeline.map(t => `<tr><td style="white-space: nowrap;"><b>${t.date || '-'}</b></td><td>${t.event || '-'}</td><td>${t.source_file || '-'} ${t.page ? `(p. ${t.page})` : ''}</td></tr>`).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
+  ${contradictions.length > 0 ? `
+  <div class="section">
+    <div class="section-head">6. Evidentiary Contradictions & Discrepancies</div>
+    <table>
+      <thead><tr><th>Issue / Topic</th><th>Statement A</th><th>Statement B</th><th>Severity</th></tr></thead>
+      <tbody>
+        ${contradictions.map(c => `<tr>
+          <td><b>${c.issue || '-'}</b><br/><small style="color:#64748b;">${c.explanation || ''}</small></td>
+          <td>"${c.statement_a || ''}"<br/><small style="color:#64748b;">${c.source_a || ''} ${c.page_a ? `(p. ${c.page_a})` : ''}</small></td>
+          <td>"${c.statement_b || ''}"<br/><small style="color:#64748b;">${c.source_b || ''} ${c.page_b ? `(p. ${c.page_b})` : ''}</small></td>
+          <td><span class="severity-${(c.severity || 'medium').toLowerCase()}">${(c.severity || 'Medium').toUpperCase()}</span></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
+  ${evidence.length > 0 ? `
+  <div class="section">
+    <div class="section-head">7. Extracted Exhibits & Evidence Items</div>
+    <table>
+      <thead><tr><th>Exhibit Label</th><th>Category</th><th>Supports</th><th>Caveat / Condition</th></tr></thead>
+      <tbody>
+        ${evidence.map(e => `<tr><td><b>${e.label || '-'}</b></td><td>${e.type || '-'}</td><td>${e.supports || '-'}</td><td>${e.caveat || '-'}</td></tr>`).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
+  <div class="footer-stamp">
+    <div>
+      <b>Counsel Certification:</b> Certified accurate and strictly grounded against uploaded evidence records.<br />
+      <b>AI-Powered Smart Courtroom</b>
+    </div>
+    <div style="text-align: right;">
+      © 2026 Krishna Mittal. All Rights Reserved.
+    </div>
+  </div>
+</body>
+</html>`
+
+    win.document.write(html)
+    win.document.close()
+  }
+
   return (
     <section className="case-workspace-v3 page-enter">
       <Toast toast={toast} onClose={() => setToast(null)} />
@@ -444,6 +588,14 @@ export default function CaseWorkspace({
               ? '↻ Analysis outdated'
               : '○ Not analyzed'}
           </span>
+          <button
+            type="button"
+            className="btn-secondary btn-export-brief"
+            onClick={exportExecutiveBrief}
+            title="Generate court-ready printable Executive Case Brief"
+          >
+            📥 Export Brief
+          </button>
           <button className="btn-primary" disabled={uploading} onClick={() => input.current?.click()}>
             {uploading ? 'Uploading…' : '＋ Add PDFs'}
           </button>

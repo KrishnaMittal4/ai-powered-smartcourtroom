@@ -931,6 +931,30 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
                       </span>
                     </div>
                   </div>
+
+                  {isListeningVoice && (
+                    <div className="live-speech-waveform-bar page-enter">
+                      <div className="waveform-indicator">
+                        <span className="live-rec-dot"></span>
+                        <span className="live-rec-label">Microphone Active · Dictating Oral Arguments</span>
+                      </div>
+                      <div className="audio-wave-bars">
+                        <span className="wave-bar wb-1"></span>
+                        <span className="wave-bar wb-2"></span>
+                        <span className="wave-bar wb-3"></span>
+                        <span className="wave-bar wb-4"></span>
+                        <span className="wave-bar wb-5"></span>
+                        <span className="wave-bar wb-6"></span>
+                        <span className="wave-bar wb-7"></span>
+                        <span className="wave-bar wb-8"></span>
+                        <span className="wave-bar wb-9"></span>
+                        <span className="wave-bar wb-10"></span>
+                        <span className="wave-bar wb-11"></span>
+                        <span className="wave-bar wb-12"></span>
+                      </div>
+                    </div>
+                  )}
+
                   <textarea
                     id="user-arg-input"
                     className="court-textarea"
@@ -1590,11 +1614,14 @@ export default function MootCourtModal({ isOpen, onClose, initialQuery = '' }) {
                     </div>
 
                     {objectionRuling && (
-                      <div className="bench-objection-ruling" style={{ margin: '8px 0', padding: '10px 14px', borderRadius: '8px', background: objectionRuling.ruling === 'SUSTAINED' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${objectionRuling.ruling === 'SUSTAINED' ? '#22c55e' : '#ef4444'}` }}>
-                        <strong style={{ color: objectionRuling.ruling === 'SUSTAINED' ? '#22c55e' : '#ef4444' }}>
-                          🏛️ BENCH RULING: {objectionRuling.ruling}
-                        </strong>
-                        <p style={{ margin: '4px 0 0', fontSize: '12px' }}>{objectionRuling.bench_response}</p>
+                      <div className="bench-objection-ruling page-enter" style={{ margin: '10px 0', padding: '12px 16px', borderRadius: '10px', background: objectionRuling.ruling === 'SUSTAINED' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)', border: `1.5px solid ${objectionRuling.ruling === 'SUSTAINED' ? '#22c55e' : '#ef4444'}`, boxShadow: '0 4px 14px rgba(0,0,0,0.15)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '12.5px', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: objectionRuling.ruling === 'SUSTAINED' ? '#22c55e' : '#ef4444' }}>
+                            ⚖️ JUDICIAL BENCH DECREE: {objectionRuling.ruling}
+                          </span>
+                          <span className="gavel-strike-icon" title="Bench Gavel Struck">🔨</span>
+                        </div>
+                        <p style={{ margin: '4px 0 0', fontSize: '12px', lineHeight: '1.45', color: 'var(--ink)' }}>{objectionRuling.bench_response}</p>
                       </div>
                     )}
 
